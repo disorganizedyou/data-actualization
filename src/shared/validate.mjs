@@ -177,7 +177,7 @@ export function validateData(d, { today = todayISO() } = {}) {
       const list = s.list, items = Array.isArray(d[list.key]) ? d[list.key] : [];
       if (!visible({ showIf: list.showIf }, d)) continue;
       if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, list.minMsg || `Додайте хоча б один елемент`));
-      items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.l, problems); });
+      items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.el || f.l, problems); });
     }
   }
   crossChecks(d, problems, today);

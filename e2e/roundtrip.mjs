@@ -40,7 +40,7 @@ const download = async selector => { const [dl] = await Promise.all([page.waitFo
 console.log('▶ анкета: порожня форма');
 await page.goto(FORM);
 await page.waitForSelector('.bar');
-await step(8);
+await step(6);
 assert.ok(await page.isDisabled('#report'), 'порожня форма: кнопка звіту має бути неактивна');
 assert.match(await page.textContent('.box.bad h3'), /Потрібно виправити/);
 
@@ -51,7 +51,7 @@ assert.equal(await page.inputValue('[data-path="unit"]'), FULL.unit);
 await fill('date', FULL.date);
 await fill('author', FULL.author);
 for (const r of ['kb', 's4', 'mp']) {
-  await step(['kb', 's4', 'mp'].indexOf(r) + 1);
+  await step(['kb', 's4', 'mp'].indexOf(r) + 1);   // черговий медпункту — на кроці «Медичні пункти» (3)
   await fill(`${r}_callsign`, FULL[`${r}_callsign`]);
   for (const c of ['phone', 'signal', 'element', 'discord']) {
     const v = FULL[`${r}_${c}`];
@@ -62,14 +62,15 @@ for (const r of ['kb', 's4', 'mp']) {
 }
 
 console.log('▶ анкета: медпункти');
-await step(4);
+await step(3);
+assert.match(await page.textContent('[data-section="medpoints"] h3'), /начальники/);
 assert.ok(!(await page.$('[data-del="medpoints:0"]')), 'єдиний медпункт не видаляється');
 for (const [i, m] of FULL.medpoints.entries()) {
   if (i > 0) await page.click('[data-add="medpoints"]');
   for (const [k, v] of Object.entries(m)) { if (v === 'Немає') await none(`medpoints.${i}.${k}`); else await fill(`medpoints.${i}.${k}`, v); }
 }
 
-await step(5);
+await step(4);
 const fillPoint = async (i, p) => {
   const path = k => `points.${i}.${k}`;
   await fill(path('name'), p.name); await fill(path('coords'), p.coords.replace(/\s/g, '').toLowerCase());
@@ -100,7 +101,7 @@ assert.equal(await page.inputValue('[data-path="points.0.nrk_count"]'), '2');
 await page.click('[data-add="points"]');
 await fillPoint(1, FULL.points[1]);
 
-await step(6);
+await step(5);
 // «Ні» → питання про інші підрозділи; обидва «Ні» → розділ алгоритму зникає
 await seg('drops', 'Ні');
 assert.ok(await page.isVisible('[data-field="drops_other"]'));
@@ -114,12 +115,12 @@ assert.ok(await page.isVisible('[data-list="positions"]'));
 await page.click('[data-add="positions"]');
 for (const [i, p] of FULL.positions.entries()) { if (i > 0) await page.click('[data-add="positions"]'); for (const k of Object.keys(p)) await fill(`positions.${i}.${k}`, p[k]); }
 await fill('algo_carry', FULL.algo_carry); await fill('algo_hand', FULL.algo_hand); await fill('algo_time', FULL.algo_time);
-await step(7);
+// формування скидів медпунктом — на тому самому кроці «Медичні скиди»
 await seg('mp_help', FULL.mp_help); await fill('mp_help_note', FULL.mp_help_note);
 await seg('mp_std', FULL.mp_std); await fill('mp_std_qty', FULL.mp_std_qty);
 
 console.log('▶ анкета: перевірка та звіт');
-await step(8);
+await step(6);
 await page.screenshot({ path: resolve(OUT, 'check.png'), fullPage: true });
 const errBox = await page.$('.box.bad');
 if (errBox) { console.error(await errBox.innerText()); throw new Error('на кроці перевірки лишилися помилки'); }

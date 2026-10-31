@@ -13,6 +13,7 @@
 //   max      максимальна довжина
 //   ph       плейсхолдер
 //   hint     підказка під полем
+//   el       підпис у списку помилок, якщо l без контексту картки неоднозначний (за замовчуванням = l)
 
 export const SCHEMA_VERSION = 4;
 export const NONE = 'Немає';
@@ -114,14 +115,15 @@ export const POSITION_FIELDS = [
 ];
 
 // ---- Медичний пункт: розташування й контакти начальника ----
-export const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `head_${c.k}` }));
+// Усередині картки «Медпункт N» підписи короткі (без повторення «медпункту»); el — для списку помилок
+export const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `head_${c.k}`, el: `${c.l} начальника` }));
 export const MEDPOINT_GROUPS = [
   { id: 'loc', title: 'Розташування', fields: [
-    { k: 'name', l: 'Назва медпункту', pl: 'Назва', v: 'name', max: 60, req: true, ph: 'наприклад: МП 2МБ, «Берізка»' },
-    { k: 'coords', l: 'Координати медпункту (MGRS)', pl: 'Координати', v: 'coords', req: true },
+    { k: 'name', l: 'Назва', el: 'Назва медпункту', pl: 'Назва', v: 'name', max: 60, req: true, ph: 'наприклад: МП 2МБ, «Берізка»' },
+    { k: 'coords', l: 'Координати (MGRS)', el: 'Координати медпункту', pl: 'Координати', v: 'coords', req: true },
   ] },
-  { id: 'head', title: 'Начальник медпункту', fields: [
-    { k: 'head_callsign', l: 'Позивний начальника медпункту', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
+  { id: 'head', title: 'Начальник', fields: [
+    { k: 'head_callsign', l: 'Позивний', el: 'Позивний начальника', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
     ...HEAD_CONTACTS,
   ] },
 ];
@@ -141,8 +143,8 @@ export const SECTIONS = [
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
   ...ROLES.map(roleSection),
-  { id: 'medpoints', title: 'Медичні пункти', pt: 'Медичні пункти',
-    hint: 'Додайте кожен медичний пункт підрозділу. Контакти тут — самого начальника медпункту, щоб медслужба могла зв’язатися з ним напряму.',
+  { id: 'medpoints', title: 'Розташування та начальники медпунктів', pt: 'Медичні пункти',
+    hint: 'Додайте всі медпункти підрозділу. Тут потрібні контакти самого начальника — для прямого зв’язку з ним.',
     list: { key: 'medpoints', item: 'Медпункт', addText: 'медпункт', min: 1, keepOne: true,
       minMsg: 'Додайте хоча б один медпункт',
       keepMsg: 'Має бути хоча б один медпункт. Можна очистити поля, але не видалити останній медпункт.',
@@ -188,11 +190,9 @@ export const STEPS = [
   { id: 'general', title: 'Загальні дані', short: 'Загальне', sections: ['general'] },
   { id: 'kb', title: 'Черговий капітан бою', short: 'КБ', sections: ['kb'] },
   { id: 's4', title: 'Черговий S4', short: 'S4', sections: ['s4'] },
-  { id: 'mp', title: 'Черговий медичного пункту', short: 'Медпункт', sections: ['mp'] },
-  { id: 'medpoints', title: 'Медичні пункти', short: 'Медпункти', sections: ['medpoints'] },
+  { id: 'med', title: 'Медичні пункти', short: 'Медпункти', sections: ['mp', 'medpoints'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
-  { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo'] },
-  { id: 'mphelp', title: 'Медпункт і скиди', short: 'Скиди МП', sections: ['mphelp'] },
+  { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo', 'mphelp'] },
   { id: 'check', title: 'Перевірка та звіт', short: 'Звіт', sections: [], final: true },
 ];
 export const stepOfSection = id => STEPS.find(s => s.sections.includes(id));

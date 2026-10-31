@@ -1,6 +1,6 @@
 // Анкета для підрозділів: покрокова форма з живою перевіркою, чернетками й звітом PDF.
 
-import { STEPS, SECTIONS, ROLES, NONE, FORM_NAME, CONTACTS_NOTE, SCHEMA_VERSION, LIST_KEYS, sectionById, listDef, listSection, visible, required, emptyData, stepOfSection } from './schema.mjs';
+import { STEPS, SECTIONS, NONE, FORM_NAME, CONTACTS_NOTE, SCHEMA_VERSION, LIST_KEYS, sectionById, listDef, listSection, visible, required, emptyData, stepOfSection } from './schema.mjs';
 import { hasText, esc, fmtDate, todayISO, safeFileName, plural } from './text.mjs';
 import { KINDS, kindOf, maxLen, validateData, normalizeData, errorsOf, warningsOf, progressOf, OTHER_MAX } from './validate.mjs';
 import { readPdfBytes, migrate } from './codec.mjs';
@@ -152,11 +152,14 @@ function listHtml(s) {
 
 function sectionHtml(s) {
   const fields = s.fields ? `<div class="fields">${s.fields.map(f => fieldHtml(f, f.k, data)).join('')}</div>` : '';
+  // пояснення про службові контакти — у кожному розділі чергового (а не на рівні кроку: на кроці «Медичні пункти»
+  // поруч є контакти начальників, для яких воно не діє)
+  const lead = s.role ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : '';
   const note = s.note ? `<p class="note">${esc(s.note)}</p>` : '';
   const hint = s.hint ? `<p class="hint">${esc(s.hint)}</p>` : '';
   const multi = stepOfSection(s.id).sections.length > 1;
   const cond = s.showIf ? ` data-cond${visible(s, data) ? '' : ' hidden'}` : '';
-  return `<section class="sec" data-section="${s.id}"${cond}>${multi ? `<h3>${esc(s.title)}</h3>` : ''}${note}${hint}${fields}${s.list ? listHtml(s) : ''}</section>`;
+  return `<section class="sec" data-section="${s.id}"${cond}>${multi ? `<h3>${esc(s.title)}</h3>` : ''}${lead}${note}${hint}${fields}${s.list ? listHtml(s) : ''}</section>`;
 }
 
 // ---------- крок перевірки ----------
@@ -224,7 +227,6 @@ function render({ keepScroll = false } = {}) {
   <main class="main">
     ${step === 0 ? introHtml() : ''}
     <h2 class="h2"><small>Крок ${step + 1} з ${STEPS.length}</small>${esc(st.title)}</h2>
-    ${ROLES.some(r => r.role === st.id) ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : ''}
     ${st.final ? checkHtml() : st.sections.map(id => sectionHtml(sectionById(id))).join('')}
   </main>
   <footer class="nav">

@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-RJjf2EDYulhS+rmATUri2+yc0vJIDqxP5P8xjLFApRw='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-5CH68Q7ARcKwUIa4ZWsuJ5p6VwQYVp6p5zJrgtFQRxE='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -210,7 +210,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-d62905a";
+const BUILD_VERSION = "v2-c5e161e";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -279,6 +279,7 @@ const iconSvg = (name, color = 'currentColor') =>
 //   max      максимальна довжина
 //   ph       плейсхолдер
 //   hint     підказка під полем
+//   el       підпис у списку помилок, якщо l без контексту картки неоднозначний (за замовчуванням = l)
 
 const SCHEMA_VERSION = 4;
 const NONE = 'Немає';
@@ -380,14 +381,15 @@ const POSITION_FIELDS = [
 ];
 
 // ---- Медичний пункт: розташування й контакти начальника ----
-const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `head_${c.k}` }));
+// Усередині картки «Медпункт N» підписи короткі (без повторення «медпункту»); el — для списку помилок
+const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `head_${c.k}`, el: `${c.l} начальника` }));
 const MEDPOINT_GROUPS = [
   { id: 'loc', title: 'Розташування', fields: [
-    { k: 'name', l: 'Назва медпункту', pl: 'Назва', v: 'name', max: 60, req: true, ph: 'наприклад: МП 2МБ, «Берізка»' },
-    { k: 'coords', l: 'Координати медпункту (MGRS)', pl: 'Координати', v: 'coords', req: true },
+    { k: 'name', l: 'Назва', el: 'Назва медпункту', pl: 'Назва', v: 'name', max: 60, req: true, ph: 'наприклад: МП 2МБ, «Берізка»' },
+    { k: 'coords', l: 'Координати (MGRS)', el: 'Координати медпункту', pl: 'Координати', v: 'coords', req: true },
   ] },
-  { id: 'head', title: 'Начальник медпункту', fields: [
-    { k: 'head_callsign', l: 'Позивний начальника медпункту', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
+  { id: 'head', title: 'Начальник', fields: [
+    { k: 'head_callsign', l: 'Позивний', el: 'Позивний начальника', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
     ...HEAD_CONTACTS,
   ] },
 ];
@@ -407,8 +409,8 @@ const SECTIONS = [
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
   ...ROLES.map(roleSection),
-  { id: 'medpoints', title: 'Медичні пункти', pt: 'Медичні пункти',
-    hint: 'Додайте кожен медичний пункт підрозділу. Контакти тут — самого начальника медпункту, щоб медслужба могла зв’язатися з ним напряму.',
+  { id: 'medpoints', title: 'Розташування та начальники медпунктів', pt: 'Медичні пункти',
+    hint: 'Додайте всі медпункти підрозділу. Тут потрібні контакти самого начальника — для прямого зв’язку з ним.',
     list: { key: 'medpoints', item: 'Медпункт', addText: 'медпункт', min: 1, keepOne: true,
       minMsg: 'Додайте хоча б один медпункт',
       keepMsg: 'Має бути хоча б один медпункт. Можна очистити поля, але не видалити останній медпункт.',
@@ -454,11 +456,9 @@ const STEPS = [
   { id: 'general', title: 'Загальні дані', short: 'Загальне', sections: ['general'] },
   { id: 'kb', title: 'Черговий капітан бою', short: 'КБ', sections: ['kb'] },
   { id: 's4', title: 'Черговий S4', short: 'S4', sections: ['s4'] },
-  { id: 'mp', title: 'Черговий медичного пункту', short: 'Медпункт', sections: ['mp'] },
-  { id: 'medpoints', title: 'Медичні пункти', short: 'Медпункти', sections: ['medpoints'] },
+  { id: 'med', title: 'Медичні пункти', short: 'Медпункти', sections: ['mp', 'medpoints'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
-  { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo'] },
-  { id: 'mphelp', title: 'Медпункт і скиди', short: 'Скиди МП', sections: ['mphelp'] },
+  { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo', 'mphelp'] },
   { id: 'check', title: 'Перевірка та звіт', short: 'Звіт', sections: [], final: true },
 ];
 const stepOfSection = id => STEPS.find(s => s.sections.includes(id));
@@ -652,7 +652,7 @@ function validateData(d, { today = todayISO() } = {}) {
       const list = s.list, items = Array.isArray(d[list.key]) ? d[list.key] : [];
       if (!visible({ showIf: list.showIf }, d)) continue;
       if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, list.minMsg || `Додайте хоча б один елемент`));
-      items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.l, problems); });
+      items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.el || f.l, problems); });
     }
   }
   crossChecks(d, problems, today);
@@ -1353,11 +1353,14 @@ function listHtml(s) {
 
 function sectionHtml(s) {
   const fields = s.fields ? `<div class="fields">${s.fields.map(f => fieldHtml(f, f.k, data)).join('')}</div>` : '';
+  // пояснення про службові контакти — у кожному розділі чергового (а не на рівні кроку: на кроці «Медичні пункти»
+  // поруч є контакти начальників, для яких воно не діє)
+  const lead = s.role ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : '';
   const note = s.note ? `<p class="note">${esc(s.note)}</p>` : '';
   const hint = s.hint ? `<p class="hint">${esc(s.hint)}</p>` : '';
   const multi = stepOfSection(s.id).sections.length > 1;
   const cond = s.showIf ? ` data-cond${visible(s, data) ? '' : ' hidden'}` : '';
-  return `<section class="sec" data-section="${s.id}"${cond}>${multi ? `<h3>${esc(s.title)}</h3>` : ''}${note}${hint}${fields}${s.list ? listHtml(s) : ''}</section>`;
+  return `<section class="sec" data-section="${s.id}"${cond}>${multi ? `<h3>${esc(s.title)}</h3>` : ''}${lead}${note}${hint}${fields}${s.list ? listHtml(s) : ''}</section>`;
 }
 
 // ---------- крок перевірки ----------
@@ -1425,7 +1428,6 @@ function render({ keepScroll = false } = {}) {
   <main class="main">
     ${step === 0 ? introHtml() : ''}
     <h2 class="h2"><small>Крок ${step + 1} з ${STEPS.length}</small>${esc(st.title)}</h2>
-    ${ROLES.some(r => r.role === st.id) ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : ''}
     ${st.final ? checkHtml() : st.sections.map(id => sectionHtml(sectionById(id))).join('')}
   </main>
   <footer class="nav">
