@@ -1,14 +1,15 @@
 // Плакат A4 «Довідка чергового» — друкує медслужба для себе зі звіту підрозділу.
 
 import { ROLES, CONTACT, sectionById, NONE } from './schema.mjs';
-import { hasText, fmtDate } from './text.mjs';
-import { kit, C, THEME, PAGE, ROLE_STYLE, T, textWidth } from './pdfkit.mjs';
+import { hasText, fmtDate, plural } from './text.mjs';
+import { kit, C, THEME, PAGE, ROLE_STYLE, T, textWidth, starWidth } from './pdfkit.mjs';
 import { iconSvg } from './icons.mjs';
-import { nrkShort, nonEmpty } from './report.mjs';
+import { nrkShort, nonEmpty, collectNeeds } from './report.mjs';
 
 export const MIN_SCALE = 0.5;
 
-export function buildPoster(d, sc = 1, { version = '' } = {}) {
+// warn — напис-попередження у шапці (наприклад, «ЧЕРНЕТКА» або «звіт із помилками»)
+export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
   const k = kit(sc), { z, val, sec } = k;
   const pts = sectionById('points'), pos = sectionById('drops'), algo = sectionById('algo');
   const unit = hasText(d.unit) ? d.unit.trim().toUpperCase() : '—';
@@ -18,7 +19,8 @@ export function buildPoster(d, sc = 1, { version = '' } = {}) {
     { width: '*', stack: [
       { text: 'Довідка чергового', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
       { text: 'Медична служба: чергові, точки передачі поранених, медичні скиди', color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
-      { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] }] },
+      { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] },
+      ...(warn ? [{ text: warn.toUpperCase(), color: '#fff', background: C.bad, bold: true, fontSize: z(8), margin: [0, z(6), 0, 0] }] : [])] },
     { width: UNIT_W, stack: [
       { text: 'Підрозділ', color: C.grey, fontSize: z(8), alignment: 'right' },
       { text: unit, font: THEME.head, bold: true, fontSize: unitFs, lineHeight: .95, noWrap: true, alignment: 'right' }] },
@@ -51,19 +53,20 @@ export function buildPoster(d, sc = 1, { version = '' } = {}) {
     const feats = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([kk]) => p[kk] === 'Так' || p[kk] === 'Частково').map(([kk, n]) => p[kk] === 'Частково' ? `${n} (част.)` : n);
     return { stack: [{ text: nrkShort(p), bold: true, fontSize: z(9.5) }, ...(feats.length ? [{ text: feats.join(', '), color: C.grey, fontSize: z(8) }] : [])] };
   };
+  const PW = [z(18), '*', z(116), z(72), z(72), '*'], PSW = starWidth(PW, PAGE.cw), fitP11 = k.fit(PSW, z(11)), fitP9 = k.fit(PSW, z(9.5));
   const points = pointRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true,
-    widths: [z(18), '*', z(116), z(72), z(72), '*'],
+    widths: PW,
     body: [[head('№'), head('Назва / орієнтир'), head('Координати MGRS'), head('Інтернет'), head('НРК'), head('Зв’язок з точкою')],
-      ...pointRows.map((p, i) => [num(i), val(p.name, z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
+      ...pointRows.map((p, i) => [num(i), val(fitP11(p.name), z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
         { stack: [val(p.net, z(9.5)), ...(hasText(p.net_note) ? [{ text: p.net_note.trim(), color: C.grey, fontSize: z(8.5) }] : [])] },
-        nrkCell(p), val(p.contact, z(9.5))])] } }
+        nrkCell(p), val(fitP9(p.contact), z(9.5))])] } }
     : { text: 'Точок не вказано', color: C.grey };
 
   const posRows = (d.positions || []).filter(nonEmpty);
   const positions = d.drops === 'Так' && posRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true,
     widths: [z(18), '*', z(112), z(70), z(70)],
     body: [[head('№'), head('Назва / позивний'), head('Координати MGRS'), head('Вага скиду'), head('Підліт')],
-      ...posRows.map((p, i) => [num(i), val(p.name, z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
+      ...posRows.map((p, i) => [num(i), val(k.fit(starWidth([z(18), '*', z(112), z(70), z(70)], PAGE.cw), z(11))(p.name), z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
         val(hasText(p.weight) ? p.weight.trim() + ' кг' : '', z(11)), val(hasText(p.flight) ? p.flight.trim() + ' хв' : '', z(11))])] } }
     : { text: d.drops === 'Ні' ? 'Позицій для медичних скидів немає' : '—', color: C.grey };
 
@@ -91,7 +94,7 @@ export function buildPoster(d, sc = 1, { version = '' } = {}) {
       sec(T(pos)), positions,
       sec(T(algo)), ...algoBlock],
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `Актуально на ${fmtDate(d.date) || '—'}. Тимчасові дані (забезпечення, потреби, підготовка) — у повному звіті підрозділу.` },
+      { text: `Актуально на ${fmtDate(d.date) || '—'}. Змінні дані (забезпечення, потреби, підготовка) — у повному звіті підрозділу.${warn ? ' ' + warn + '.' : ''}` },
       { text: total > 1 ? `${cur} / ${total}` : '', alignment: 'right', width: 40 }] }),
   };
 }
@@ -100,7 +103,7 @@ export function buildPoster(d, sc = 1, { version = '' } = {}) {
 export function buildContactsSheet(reports, { version = '' } = {}) {
   const k = kit(1), { z, val, sec } = k;
   const rows = reports.map(r => r.data);
-  const CW = +((PAGE.cw - 60 - 4 * 8) / 3).toFixed(1), wrap = k.wrapTo(CW - 30, z(8));
+  const CW = +((PAGE.cw - 60 - 6 - 3 * 12) / 3).toFixed(1), wrap = k.wrapTo(CW - 30, z(8));
   const cell = (d, role) => ({ stack: [
     { text: hasText(d[`${role}_callsign`]) ? d[`${role}_callsign`].trim() : '—', bold: true, fontSize: z(9.5) },
     ...CONTACT.filter(c => c.icon).map(c => ({ columnGap: z(4), columns: [
@@ -113,7 +116,7 @@ export function buildContactsSheet(reports, { version = '' } = {}) {
     defaultStyle: { font: 'eU', fontSize: 9, lineHeight: 1.15, color: C.ink },
     content: [
       { text: 'Чергові підрозділів', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
-      { text: `Зведення зі звітів ${rows.length} підрозділів · службові контакти чергових акаунтів`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      { text: `${rows.length === 1 ? 'Зі звіту 1 підрозділу' : `Зі звітів ${rows.length} ${plural(rows.length, 'підрозділу', 'підрозділів', 'підрозділів')}`} · службові контакти чергових акаунтів`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
       sec('Контакти'),
       { layout: k.lines(true, 5), table: { headerRows: 1, dontBreakRows: true, widths: [60, CW, CW, CW],
         body: [[{ text: 'Підрозділ', color: C.grey, fontSize: z(7.5) }, ...ROLES.map(r => ({ columnGap: z(5), columns: [k.badge(r.role, z(14)), { width: '*', text: ROLE_STYLE[r.role].name, bold: true, fontSize: z(8.5) }] }))],
@@ -123,5 +126,31 @@ export function buildContactsSheet(reports, { version = '' } = {}) {
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
       { text: 'Зведення контактів чергових. Дата біля назви підрозділу — дата актуальності його звіту.' },
       { text: total > 1 ? `${cur} / ${total}` : '', alignment: 'right', width: 40 }] }),
+  };
+}
+
+// Зведення потреб і зауваг усіх підрозділів — для планування дозабезпечення
+export function buildNeedsSheet(reports, { version = '' } = {}) {
+  const k = kit(1), { z, sec } = k;
+  const LW = 70, WW = 110, fitT = k.fit(starWidth([LW, WW, '*'], PAGE.cw), z(9));
+  const blocks = reports.flatMap(r => {
+    const needs = collectNeeds(r.data).filter(n => n.level !== 'note');
+    const unit = hasText(r.data.unit) ? r.data.unit.trim().toUpperCase() : '—';
+    return needs.map((n, i) => [i === 0 ? { stack: [{ text: unit, font: THEME.head, bold: true, fontSize: z(11) }, { text: fmtDate(r.data.date), color: C.grey, fontSize: z(7) }] } : '',
+      { text: n.where, color: C.grey, fontSize: z(8.5) }, { text: fitT(n.what), bold: n.level === 'bad', color: n.level === 'bad' ? C.bad : C.ink, fontSize: z(9) }]);
+  });
+  const total = reports.length;
+  return {
+    pageSize: 'A4', pageMargins: [PAGE.m, PAGE.m, PAGE.m, 40],
+    info: { title: 'Потреби підрозділів — зведення', creator: `Медслужба — плакати ${version}`.trim(), producer: 'pdfmake' },
+    defaultStyle: { font: 'eU', fontSize: 9, lineHeight: 1.15, color: C.ink },
+    content: [
+      { text: 'Потреби та зауваги підрозділів', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
+      { text: `${total === 1 ? 'Зі звіту 1 підрозділу' : `Зі звітів ${total} ${plural(total, 'підрозділу', 'підрозділів', 'підрозділів')}`} · червоним — брак майна чи засобів, чорним — зауваги`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      sec('Потреби'),
+      blocks.length ? { layout: k.lines(false, 4), table: { widths: [LW, WW, '*'], dontBreakRows: true, body: blocks } } : { text: 'Потреб не зазначено', color: C.grey },
+    ],
+    footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
+      { text: 'Зведення потреб. Дата біля назви підрозділу — дата актуальності його звіту.' }, { text: total > 1 ? `${cur} / ${total}` : '', alignment: 'right', width: 40 }] }),
   };
 }

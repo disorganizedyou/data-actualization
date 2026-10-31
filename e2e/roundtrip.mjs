@@ -81,6 +81,15 @@ const fillPoint = async (i, p) => {
 assert.ok(await page.isHidden('[data-field="points.0.nrk_count"]'), 'Кількість НРК прихована, поки НРК не обрано');
 await fillPoint(0, FULL.points[0]);
 assert.ok(await page.isVisible('[data-field="points.0.nrk_count"]'), 'Кількість НРК показано після «Є»');
+// повторний дотик до вже обраного варіанта нічого не скидає
+await seg('points.0.nrk', 'Є');
+assert.equal(await page.inputValue('[data-path="points.0.nrk_count"]'), '2', 'повторний дотик не стирає залежні поля');
+// згортання/розгортання картки не перемальовує сторінку (поле з фокусом лишається)
+await page.focus('[data-path="points.0.nrk_note"]');
+await page.click('[data-toggle="points:0"]');
+assert.ok(await page.isHidden('[data-path="points.0.nrk_note"]'));
+await page.click('[data-toggle="points:0"]');
+assert.equal(await page.inputValue('[data-path="points.0.nrk_count"]'), '2');
 await page.click('[data-add="points"]');
 await fillPoint(1, FULL.points[1]);
 
@@ -126,6 +135,8 @@ await page.waitForSelector('.bar');
 await page.click('#clear');
 await page.setInputFiles('#open', report.path);
 await page.waitForSelector('.box.ok');
+assert.ok(await page.isVisible('#today'), 'нагадування оновити дату після відкриття звіту');
+assert.ok(await page.isVisible('.box.bad') === false);
 for (const cb of await page.$$('[data-ack]')) { if (!(await cb.isChecked())) await cb.click(); }
 const report2 = await download('#report');
 const payload2 = await readPdfBytes(report2.bytes, { inflate });
@@ -162,6 +173,12 @@ assert.equal(pageCount(poster.bytes), 1, 'плакат на один аркуш'
 console.log('  плакат:', poster.name, poster.bytes.length, 'байт');
 const all = await mdl('#all'); assert.ok(pageCount(all.bytes) >= 1);
 const sheet = await mdl('#sheet'); assert.equal(pageCount(sheet.bytes), 1);
+const needs = await mdl('#needs'); assert.equal(pageCount(needs.bytes), 1); assert.match(needs.name, /^Potreby_/);
+// старий звіт: позначка «стара форма», а не червоні помилки
+await mpage.setInputFiles('#open', resolve(ROOT, 'test/fixtures/legacy_v1.pdf'));
+await mpage.waitForFunction(() => document.querySelectorAll('.tbl tbody tr:not(.det)').length === 2);
+const legacyRow = await mpage.textContent('tr:has(.unit:text("МР")) .st');
+assert.match(legacyRow, /стара форма/); assert.ok(!/помил/.test(legacyRow), 'нові поля старого звіту — не «помилки»');
 const regen = await mdl('[data-report]'); assert.match(regen.name, /^Zvit_med_/);
 
 await browser.close();

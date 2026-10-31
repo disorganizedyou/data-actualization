@@ -34,6 +34,7 @@ test('порожня анкета — всі обов’язкові поля я
   assert.ok(e.some(x => x.path === 'points.0.nrk'));
   assert.ok(e.some(x => x.path === 'points.0.hypo_heat'));
   assert.ok(e.some(x => x.path === 'points.0.ppe'));
+  assert.ok(e.some(x => x.path === 'points.0.training'));
   assert.equal(progressOf(normalizeData(emptyData())).done, 0);
 });
 
@@ -93,7 +94,10 @@ test('НРК: за «Є» обов’язкові кількість і три �
   const e = errs(d).map(x => x.path);
   for (const k of ['nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic']) assert.ok(e.includes(`points.1.${k}`), k);
   d.points[0].nrk_count = '1';
-  assert.ok(errs(d).some(x => x.path === 'points.0.nrk_count' && /Частково/.test(x.msg)));
+  assert.ok(errs(d).some(x => x.path === 'points.0.nrk_reb' && /Частково/.test(x.msg)), 'помилка стоїть на ознаці з «Частково»');
+  d.points[0].nrk_count = '01';
+  assert.ok(errs(d).some(x => x.path === 'points.0.nrk_reb'), 'початковий нуль не обходить звірку');
+  assert.equal(normalizeData(d).points[0].nrk_count, '1');
   d.points[0].nrk_count = '0';
   assert.ok(errs(d).some(x => x.path === 'points.0.nrk_count' && /менше/.test(x.msg)));
   d.points[1].nrk = 'Немає'; d.points[1].nrk_count = '5';
@@ -110,7 +114,7 @@ test('гіпотермія та хімзахист обов’язкові дл�
 test('підготовка: хоча б один рівень або «інше»', () => {
   const d = clone();
   for (const k of Object.keys(d.points[1])) if (k.startsWith('training_')) delete d.points[1][k];
-  assert.ok(errs(d).some(x => x.path === 'points.1.training_asm' && /хоча б/.test(x.msg)));
+  assert.ok(errs(d).some(x => x.path === 'points.1.training' && /хоча б/.test(x.msg)), 'помилка групи на шляху групи');
   d.points[1].training_other = 'санінструктор';
   assert.ok(!errs(d).some(x => x.path.startsWith('points.1.training')));
   d.points[1].training_cls = 'x';
@@ -188,4 +192,53 @@ test('транслітерація імен файлів', async () => {
   assert.equal(translit('Їжак Юрій Згорани'), 'Yizhak Yurii Zghorany');
   assert.equal(translit('1 РОТА'), '1 ROTA');
   assert.equal(safeFileName('Zvit_med_1 РОТА/медик_2026-10-30'), 'Zvit_med_1_ROTA_medyk_2026-10-30');
+});
+
+test('телефон: українські номери — рівно 9 цифр після +380; 00-префікс; юнікодні тире', () => {
+  assert.ok(!KINDS.phone.ok('+380 67 123 45 678'), 'зайва цифра');
+  assert.ok(!KINDS.phone.ok('+380 67 123 45 6'), 'бракує цифри');
+  assert.ok(KINDS.phone.ok('+48 123 456 789'), 'інша країна — E.164');
+  assert.equal(normPhone('00380671234567'), '+380 67 123 45 67');
+  assert.equal(normPhone('+380 67 123–45–67'), '+380 67 123 45 67');
+});
+
+test('Element: посилання matrix.to та повний MXID → нікнейм; «https» не проходить', () => {
+  assert.equal(KINDS.element.norm('https://matrix.to/#/@kit:matrix.org'), 'kit');
+  assert.equal(KINDS.element.norm('@kit.07:example.com:8448'), 'kit.07');
+  assert.equal(KINDS.element.norm('kit'), 'kit');
+  const bad = KINDS.element.norm('https://example.com/room');
+  assert.ok(!KINDS.element.ok(bad));
+});
+
+test('MGRS: кириличні двійники й дефіси нормалізуються', () => {
+  assert.equal(normCoords('37Т СТ 12345-67890'), '37T CT 12345 67890'); // Т, С — кирилиця
+  assert.equal(normCoords('37u dq 12345 67890'), '37U DQ 12345 67890');
+});
+
+test('числа: початкові нулі прибираються, кг канонізуються', () => {
+  assert.equal(KINDS.count.norm('007'), '7');
+  assert.equal(KINDS.min.norm('015'), '15');
+  assert.equal(KINDS.kg.norm('02.50'), '2,5');
+  assert.equal(KINDS.kg.norm('6,0'), '6');
+});
+
+test('позивний: варіанти апострофа і крапка', () => {
+  assert.equal(KINDS.callsign.norm("Мар`ян"), 'Мар’ян');
+  assert.ok(KINDS.callsign.ok('Мар’ян'));
+  assert.ok(KINDS.callsign.ok('Сокіл 2.0'));
+});
+
+test('імпорт: рядки обрізаються до ліміту, nbsp → пробіл, забагато рядків — помилка, одна помилка на поле', () => {
+  const n = normalizeData({ unit: 'м\u00A0р', author: 'x'.repeat(5000) });
+  assert.equal(n.unit, 'М Р');
+  assert.equal(n.author.length, 2000);
+  const d = clone(); d.algo_carry = Array.from({ length: 25 }, (_, i) => 'рядок ' + i).join('\n');
+  assert.ok(errs(d).some(x => x.path === 'algo_carry' && /рядків/.test(x.msg)));
+  d.algo_carry = FULL.algo_carry; d.points[0].coords = '37U DQ 12345 67890 (приблизно)';
+  assert.equal(errs(d).filter(x => x.path === 'points.0.coords').length, 1);
+});
+
+test('дата: неіснуючий календарний день не проходить', () => {
+  const d = clone(); d.date = '2026-02-30';
+  assert.ok(errs(d).some(x => x.path === 'date'));
 });

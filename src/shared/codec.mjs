@@ -71,30 +71,40 @@ const LEGACY_RE = /https:\/\/dani\.invalid\/v1#([A-Za-z0-9_-]+)/;
 export function findMarker(raw) {
   const m = raw.match(MARK_RE);
   if (m) {
+    if (m[1].length > MAX_PAYLOAD * 4 / 3) throw new Error('Завеликі дані у файлі');
     const bytes = fromB64url(m[1]);
-    if (bytes.length > MAX_PAYLOAD) throw new Error('Завеликі дані у файлі');
     if (crc32(bytes) !== m[2]) throw new Error('Дані у файлі пошкоджено (не збігається контрольна сума)');
     return new TextDecoder().decode(bytes);
   }
   let l = raw.match(LEGACY_RE);
-  if (!l) for (const h of raw.matchAll(/\/URI\s*<([0-9A-Fa-f\s]+)>/g)) {
+  if (!l) for (const h of raw.matchAll(/\/URI\s*<([0-9A-Fa-f\s]{1,2000000})>/g)) {
     l = h[1].replace(/\s/g, '').replace(/../g, x => String.fromCharCode(parseInt(x, 16))).match(LEGACY_RE);
     if (l) break;
   }
-  if (l) return new TextDecoder().decode(fromB64url(l[1]));
+  if (l) {
+    if (l[1].length > MAX_PAYLOAD * 4 / 3) throw new Error('Завеликі дані у файлі');
+    return new TextDecoder().decode(fromB64url(l[1]));
+  }
   return null;
 }
 
-// Знаходить потік вкладеного файла data.json (записаного pdfkit) і повертає його байти та фільтр
+// Знаходить потік вкладеного файла data.json (записаного pdfkit) і повертає його байти та фільтр.
+// Лінійний пошук через indexOf — жодних regex по всьому файлу (великий сторонній PDF не має вішати вкладку).
 export function findEmbeddedStream(bytes) {
   const raw = latin1(bytes);
-  const re = /<<[^]*?\/Type\s*\/EmbeddedFile[^]*?>>\s*stream\r?\n/g;
-  let m;
-  while ((m = re.exec(raw))) {
-    const dict = m[0];
-    const len = dict.match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/);
+  let i = 0;
+  while ((i = raw.indexOf('/EmbeddedFile', i)) !== -1) {
+    const d0 = raw.lastIndexOf('<<', i);
+    const s0 = raw.indexOf('stream', i);
+    i += 13;
+    if (d0 === -1 || s0 === -1 || s0 - d0 > 4000) continue;
+    const dict = raw.slice(d0, s0);
+    const len = dict.match(/\/Length\s+(\d{1,9})(?!\s+\d+\s+R)/);
     if (!len) continue;
-    const start = m.index + m[0].length, n = +len[1];
+    let start = s0 + 6;
+    if (raw[start] === '\r') start++;
+    if (raw[start] === '\n') start++;
+    const n = +len[1];
     if (n > MAX_PAYLOAD * 4 || start + n > bytes.length) continue;
     return { data: bytes.subarray(start, start + n), deflated: /\/Filter\s*\/FlateDecode/.test(dict) };
   }
@@ -113,15 +123,26 @@ export async function readPdfBytes(bytes, { inflate } = {}) {
     const data = emb.deflated ? await (inflate || defaultInflate)(emb.data) : emb.data;
     return parsePayload(new TextDecoder().decode(data));
   }
-  throw new Error('У цьому файлі немає даних форми. Оберіть PDF, який було сформовано саме цією формою.');
+  throw new Error('У цьому файлі немає даних анкети. Оберіть PDF-звіт або чернетку, сформовані анкетою актуалізації даних.');
 }
 
 async function defaultInflate(data) {
   if (typeof DecompressionStream === 'undefined') throw new Error('Браузер не підтримує розпакування вкладення — відкрийте файл у новішому браузері');
-  const ds = new DecompressionStream('deflate');
-  const w = ds.writable.getWriter(); w.write(data); w.close();
-  return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+  // Читаємо порціями й зупиняємось, щойно розпаковане перевищить ліміт (захист від «бомби» стиснення)
+  const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate')).getReader();
+  const chunks = []; let total = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_PAYLOAD) { await reader.cancel(); throw new Error('Завеликі дані у файлі'); }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total); let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
 }
+export const inflateLimit = MAX_PAYLOAD;
 
 // Властивості для docDefinition pdfmake: вкладення + маркер в Info
 export function pdfEmbedding(payload) {

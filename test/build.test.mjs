@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { stripModule, build } from '../build/build.mjs';
 import { buildReport, collectNeeds } from '../src/shared/report.mjs';
-import { buildPoster, buildContactsSheet } from '../src/shared/poster.mjs';
+import { buildPoster, buildContactsSheet, buildNeedsSheet } from '../src/shared/poster.mjs';
 import { normalizeData } from '../src/shared/validate.mjs';
 import { FULL } from './fixtures.mjs';
 
@@ -16,7 +18,8 @@ test('stripModule прибирає import/export', () => {
 });
 
 test('збірка: два файли, CSP з хешами, без зовнішніх ресурсів', () => {
-  const r = build({ version: 'test' });
+  const r = build({ version: 'test', outDir: mkdtempSync(join(tmpdir(), 'anketa-build-')) });
+  assert.equal(Object.keys(r).length, 2);
   for (const f of Object.keys(r)) {
     const html = readFileSync(f, 'utf8');
     assert.match(html, /Content-Security-Policy/);
@@ -27,7 +30,9 @@ test('збірка: два файли, CSP з хешами, без зовніш�
     assert.ok(!/https?:\/\/[^"'\s]*\.(js|css)/.test(html.replace(/pdfmake\.org|mozilla\.org/g, '')), 'немає посилань на зовнішні ресурси');
     assert.ok(!/<!--(CSP|CSS|SCRIPTS|VERSION)-->/.test(html));
     assert.ok(html.length < 2.5 * 1024 * 1024);
+    if (f.endsWith('anketa.html')) assert.ok(!/function buildPoster/.test(html), 'в анкеті немає коду плаката');
   }
+  assert.throws(() => build({ version: '<script>', outDir: mkdtempSync(join(tmpdir(), 'anketa-build-')) }), /версії/);
 });
 
 test('docDefinition звіту й плаката будуються без винятків для повної та порожньої анкети', () => {
@@ -42,10 +47,15 @@ test('docDefinition звіту й плаката будуються без ви�
   }
   const sheet = buildContactsSheet([{ data: normalizeData(FULL) }, { data: normalizeData({}) }]);
   assert.ok(sheet.content.length >= 3);
+  const needs = buildNeedsSheet([{ data: normalizeData(FULL) }, { data: normalizeData({}) }]);
+  assert.ok(needs.content.length >= 4);
+  const warned = buildPoster(normalizeData(FULL), 1, { warn: 'Чернетка' });
+  assert.ok(JSON.stringify(warned.content[0]).includes('ЧЕРНЕТКА'));
 });
 
 test('collectNeeds збирає потреби й зауваги', () => {
   const n = collectNeeds(normalizeData(FULL));
   const txt = n.map(x => x.what).join('\n');
   assert.match(txt, /Дозабезпечення: турнікети/); assert.match(txt, /спальників/); assert.match(txt, /Хімзахист частково/); assert.match(txt, /НРК немає/); assert.match(txt, /Потрібна допомога/);
+  assert.ok(!/бракує — бракує/.test(txt));
 });

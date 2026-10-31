@@ -8,16 +8,18 @@
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { Script } from 'node:vm';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = p => readFileSync(resolve(ROOT, p), 'utf8');
 
-export const SHARED = ['text', 'icons', 'schema', 'validate', 'codec', 'pdfkit', 'report', 'poster'].map(n => `src/shared/${n}.mjs`);
+const shared = (...names) => ['text', 'icons', 'schema', 'validate', 'codec', 'pdfkit', 'report', ...names].map(n => `src/shared/${n}.mjs`);
+// В анкеті модуля плаката немає взагалі — підрозділи плакат не генерують
 export const TARGETS = {
-  'dist/anketa.html': { template: 'src/form/index.html', css: 'src/form/form.css', modules: [...SHARED, 'src/form/app.mjs'] },
-  'dist/medsluzhba.html': { template: 'src/med/index.html', css: 'src/med/med.css', modules: [...SHARED, 'src/med/app.mjs'] },
+  'anketa.html': { template: 'src/form/index.html', css: 'src/form/form.css', modules: [...shared(), 'src/form/app.mjs'] },
+  'medsluzhba.html': { template: 'src/med/index.html', css: 'src/med/med.css', modules: [...shared('poster'), 'src/med/app.mjs'] },
 };
 
 export function stripModule(src, name) {
@@ -68,22 +70,27 @@ export function checkVendor({ update = false } = {}) {
   return manifest;
 }
 
-export function build({ version = process.env.BUILD_VERSION || gitVersion() } = {}) {
+const escHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const jsString = s => JSON.stringify(s).replace(/</g, '\\u003c').replace(/\u2028|\u2029/g, c => '\\u' + c.charCodeAt(0).toString(16));
+
+export function build({ version = process.env.BUILD_VERSION || gitVersion(), outDir = resolve(ROOT, 'dist') } = {}) {
   checkVendor();
-  mkdirSync(resolve(ROOT, 'dist'), { recursive: true });
+  if (!/^[\w.\-+]{1,40}$/.test(version)) throw new Error(`Недопустимий рядок версії: ${version}`);
+  mkdirSync(outDir, { recursive: true });
   const vendor = read('vendor/pdfmake.min.js');
   const fonts = `const FONT_DATA = ${JSON.stringify(fontData())};${FONT_SETUP}`;
   const results = {};
-  for (const [out, t] of Object.entries(TARGETS)) {
+  for (const [name, t] of Object.entries(TARGETS)) {
+    const out = resolve(outDir, name);
     checkDuplicates(t.modules);
-    const app = `(() => {\n'use strict';\nconst BUILD_VERSION = ${JSON.stringify(version)};\n${t.modules.map(m => stripModule(read(m), m)).join('\n')}\n})();`;
+    const app = `(() => {\n'use strict';\nconst BUILD_VERSION = ${jsString(version)};\n${t.modules.map(m => stripModule(read(m), m)).join('\n')}\n})();`;
+    syntaxCheck(app, name);
     const scripts = [vendor, fonts, app];
+    for (const sc of scripts) if (/<\/script/i.test(sc) || (/<!--/.test(sc) && /<script/i.test(sc))) throw new Error(`${name}: тіло скрипта зламає HTML-парсер (</script або <!-- … <script)`);
     const csp = [
       "default-src 'none'",
       `script-src ${scripts.map(sha).join(' ')}`,
       "style-src 'unsafe-inline'",
-      'img-src data: blob:',
-      'font-src data:',
       "connect-src 'none'",
       "form-action 'none'",
       "base-uri 'none'",
@@ -92,19 +99,26 @@ export function build({ version = process.env.BUILD_VERSION || gitVersion() } = 
       .replace('<!--CSP-->', () => `<meta http-equiv="Content-Security-Policy" content="${csp}">`)
       .replace('<!--CSS-->', () => `<style>\n${read(t.css)}\n</style>`)
       .replace('<!--SCRIPTS-->', () => scripts.map(s => `<script>${s}</script>`).join('\n'))   // функції-замінники: у pdfmake є «$&»-подібні послідовності
-      .replace(/<!--VERSION-->/g, () => version);
+      .replace(/<!--VERSION-->/g, () => escHtml(version));
     if (/<!--(CSP|CSS|SCRIPTS)-->/.test(html)) throw new Error(`${t.template}: не всі плейсхолдери замінено`);
-    writeFileSync(resolve(ROOT, out), html);
+    writeFileSync(out, html);
     results[out] = html.length;
   }
   return results;
+}
+
+// Класичний скрипт із залишком import/export не розпарситься — перевіряємо синтаксис до запису
+function syntaxCheck(code, name) {
+  try { new Script(code, { filename: name }); } catch (e) { throw new Error(`${name}: зібраний скрипт не парситься: ${e.message}`); }
 }
 
 // Модулі склеюються в одну область видимості — однакові імена на верхньому рівні перекриють одне одного
 function checkDuplicates(modules) {
   const seen = new Map();
   for (const m of modules) {
-    const names = [...read(m).matchAll(/^(?:export\s+)?(?:const|let|var|function|async function|class)\s+([A-Za-z_$][\w$]*)/gm)].map(x => x[1]);
+    const src = read(m);
+    const names = [...src.matchAll(/^(?:export\s+)?(?:const|let|var|function|async function|class)\s+([A-Za-z_$][\w$]*)/gm)].map(x => x[1]);
+    for (const m2 of src.matchAll(/^(?:export\s+)?(?:const|let|var)\s+\{([^}]*)\}/gm)) names.push(...m2[1].split(',').map(x => x.split(':').pop().trim()).filter(Boolean));
     for (const n of names) {
       if (seen.has(n)) throw new Error(`Дубль імені «${n}» у ${m} та ${seen.get(n)}`);
       seen.set(n, m);
@@ -112,14 +126,14 @@ function checkDuplicates(modules) {
   }
 }
 
+// Версія збірки: дата + 7 знаків хешу вихідних файлів (детерміновано, не залежить від git)
 function gitVersion() {
-  try {
-    const { execSync } = require('node:child_process');
-    return execSync('git describe --always --dirty', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
-  } catch { return 'dev'; }
+  const h = createHash('sha256');
+  const files = ['src/shared', 'src/form', 'src/med', 'build', 'vendor'].flatMap(dir => readdirSync(resolve(ROOT, dir), { withFileTypes: true, recursive: true })
+    .filter(e => e.isFile()).map(e => resolve(e.parentPath ?? e.path, e.name))).sort();
+  for (const f of files) h.update(f.slice(ROOT.length)).update(readFileSync(f));
+  return `v2-${h.digest('hex').slice(0, 7)}`;
 }
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--update-manifest')) { checkVendor({ update: true }); console.log('vendor/MANIFEST.json оновлено'); }

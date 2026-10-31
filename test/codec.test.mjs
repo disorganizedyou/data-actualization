@@ -85,3 +85,17 @@ test('справжній PDF старої форми (версія 1) читає
   assert.equal(p.data.points[0].coords, '37U DQ 12345 67890');
   assert.equal(p.data.points[0].nrk, undefined);
 });
+
+test('великий сторонній PDF без даних перевіряється швидко (лінійний пошук)', async () => {
+  const chunk = '<< /Type /Page /Parent 1 0 R /Contents 2 0 R >>\n';
+  const big = enc('%PDF-1.4\n' + chunk.repeat(80000) + '%%EOF'); // ~4 МБ, тисячі словників
+  const t0 = Date.now();
+  await assert.rejects(readPdfBytes(big, { inflate }), /немає даних/);
+  assert.ok(Date.now() - t0 < 1500, `надто довго: ${Date.now() - t0} мс`);
+});
+
+test('розпакування вкладення обмежене за розміром (захист від бомби стиснення)', async () => {
+  const bomb = deflateSync(Buffer.alloc(3 * 1024 * 1024, 0x61)); // 3 МБ «a» → кілька КБ
+  const pdf = new Uint8Array([...enc(`%PDF-1.3\n<< /Type /EmbeddedFile /Length ${bomb.length} /Filter /FlateDecode >>\nstream\n`), ...bomb, ...enc('\nendstream\n%%EOF')]);
+  await assert.rejects(readPdfBytes(pdf), /Завеликі/); // без inflate — вбудований DecompressionStream Node 22
+});

@@ -1,8 +1,8 @@
 // Повний звіт (PDF) — те, що підрозділ надсилає медслужбі.
 
-import { SECTIONS, ROLES, CONTACT, TITLE, LEVELS, POINT_GROUPS, POSITION_FIELDS, sectionById, visible, NONE } from './schema.mjs';
-import { hasText, fmtDate, people } from './text.mjs';
-import { kit, C, THEME, PAGE, ROLE_STYLE, L, T, keepHeadings } from './pdfkit.mjs';
+import { ROLES, CONTACT, TITLE, LEVELS, POINT_GROUPS, POSITION_FIELDS, sectionById, visible, required, NONE } from './schema.mjs';
+import { hasText, fmtDate, people, plural } from './text.mjs';
+import { kit, C, THEME, PAGE, ROLE_STYLE, L, T, keepHeadings, starWidth } from './pdfkit.mjs';
 import { pdfEmbedding, makePayload } from './codec.mjs';
 import { validateData, errorsOf } from './validate.mjs';
 
@@ -21,14 +21,14 @@ export function collectNeeds(d) {
   (d.points || []).forEach((p, i) => {
     const at = `Точка ${i + 1}${hasText(p.name) ? ` «${p.name.trim()}»` : ''}`;
     if (p.need === 'Є' && hasText(p.need_note)) out.push({ where: at, what: 'Дозабезпечення: ' + p.need_note.trim(), level: 'bad' });
-    if ((p.supplied === 'Ні' || p.supplied === 'Частково') && hasText(p.supplied_note)) out.push({ where: at, what: `Майно (${p.supplied.toLowerCase()}): бракує — ${p.supplied_note.trim()}`, level: 'bad' });
+    if ((p.supplied === 'Ні' || p.supplied === 'Частково') && hasText(p.supplied_note)) out.push({ where: at, what: `Майно (${p.supplied.toLowerCase()}): ${p.supplied_note.trim()}`, level: 'bad' });
     const hypo = [['hypo_heat', 'хімічних грілок'], ['hypo_bag', 'спальників'], ['hypo_ready', 'Ready-Heat']].filter(([k]) => p[k] === NONE).map(([, n]) => n);
     if (hypo.length) out.push({ where: at, what: 'Немає засобів проти гіпотермії: ' + hypo.join(', '), level: 'bad' });
     if (p.ppe === NONE) out.push({ where: at, what: 'Немає засобів хімзахисту', level: 'bad' });
     if (p.ppe === 'Частково') out.push({ where: at, what: 'Хімзахист частково' + (hasText(p.ppe_note) ? ': ' + p.ppe_note.trim() : ''), level: 'warn' });
-    if (p.nrk === NONE) out.push({ where: at, what: 'НРК немає', level: 'warn' });
-    if (p.net === NONE) out.push({ where: at, what: 'Інтернету немає', level: 'warn' });
-    if (trainingTotal(p) === 0 && !hasText(p.training_other)) out.push({ where: at, what: 'Підготовлений персонал не вказано', level: 'bad' });
+    if (p.nrk === NONE) out.push({ where: at, what: 'НРК немає', level: 'note' });
+    if (p.net === NONE) out.push({ where: at, what: 'Інтернету немає', level: 'note' });
+    if (trainingTotal(p) === 0 && !hasText(p.training_other)) out.push({ where: at, what: 'Підготовленого персоналу не вказано', level: 'bad' });
   });
   if (d.mp_help === 'Так' && hasText(d.mp_help_note)) out.push({ where: 'Медпункт', what: 'Потрібна допомога у формуванні скидів: ' + d.mp_help_note.trim(), level: 'bad' });
   if (d.mp_std === 'Є' && hasText(d.mp_std_qty)) out.push({ where: 'Медпункт', what: 'Скиди встановленого зразка: ' + d.mp_std_qty.trim(), level: 'warn' });
@@ -36,14 +36,15 @@ export function collectNeeds(d) {
 }
 
 // d — нормалізовані дані; opts.kind 'report' | 'draft'; opts.created — ISO-рядок часу формування; opts.version — версія збірки
-export function buildReport(d, { kind = 'report', created = '', version = '' } = {}) {
+export function buildReport(d, { kind = 'report', created = '', version = '', regenerated = '' } = {}) {
   const k = kit(1), { z, val, lab, sec, pill } = k;
   const pts = sectionById('points'), pos = sectionById('drops'), algo = sectionById('algo'), mp = sectionById('mphelp');
   const LW = +(PAGE.cw * .3).toFixed(1);
   const draft = kind === 'draft';
   const problems = validateData(d), errors = errorsOf(problems);
+  const VW = starWidth([LW, '*'], PAGE.cw), fitV = k.fit(VW, z(9));
   const kv = (fields, o) => ({ layout: k.lines(false), table: { widths: [LW, '*'], dontBreakRows: true,
-    body: fields.filter(f => visible(f, o)).map(f => [lab(L(f)), val(cellText(f, o))]) } });
+    body: fields.filter(f => visible(f, o)).map(f => [lab(L(f)), val(fitV(cellText(f, o)))]) } });
 
   // Контакти чергових
   const CL = 78, CW = +((PAGE.cw - CL - 6 - ROLES.length * 12) / ROLES.length).toFixed(1), wrapC = k.wrapTo(CW, z(10));
@@ -55,15 +56,16 @@ export function buildReport(d, { kind = 'report', created = '', version = '' } =
   // Зведення по точках
   const points = (d.points || []).filter(nonEmpty);
   const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
+  const SUMW = [12, '*', 48, 44, 44, 36, 46, 46, 46, 40], fitName = k.fit(starWidth(SUMW, PAGE.cw), z(8.5));
   const summary = points.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true,
-    widths: [14, '*', 50, 46, 50, 36, 40, 40, 48, 40],
+    widths: SUMW,
     body: [[head('№'), head('Точка'), head('Майно'), head('Потреба'), head('НРК'), head('Грілки'), head('Спальники'), head('Ready-Heat'), head('Хімзахист'), head('Підгот.')],
       ...points.map((p, i) => [
         { text: String(i + 1), color: THEME.grey, fontSize: z(8) },
-        { stack: [{ text: hasText(p.name) ? p.name.trim() : '—', bold: true, fontSize: z(8.5) }, { text: p.coords || '', color: C.grey, fontSize: z(7) }] },
+        { stack: [{ text: hasText(p.name) ? fitName(p.name.trim()) : '—', bold: true, fontSize: z(8.5) }, { text: p.coords || '', color: C.grey, fontSize: z(7) }] },
         pill('supplied', p.supplied), pill('need', p.need), pill('nrk', nrkShort(p)),
         pill('hypo', p.hypo_heat), pill('hypo', p.hypo_bag), pill('hypo', p.hypo_ready), pill('ppe', p.ppe),
-        { text: trainingTotal(p) > 0 ? people(trainingTotal(p)) : hasText(p.training_other) ? 'див.' : '—', bold: trainingTotal(p) > 0, color: trainingTotal(p) > 0 ? C.ink : C.bad, fontSize: z(8) },
+        { text: trainingTotal(p) > 0 ? people(trainingTotal(p)) : hasText(p.training_other) ? 'інше ↓' : '—', bold: trainingTotal(p) > 0, color: trainingTotal(p) > 0 ? C.ink : hasText(p.training_other) ? C.grey : C.bad, fontSize: z(8) },
       ])] } } : null;
 
   // Детально по точках
@@ -71,10 +73,12 @@ export function buildReport(d, { kind = 'report', created = '', version = '' } =
     body: [[{ colSpan: 2, text: [{ text: `Точка ${i + 1}`, color: C.ink }, hasText(p.name) ? '   ' + p.name.trim() : ''], bold: true, fontSize: z(10.5) }, {}],
       ...POINT_GROUPS.flatMap(g => {
         // необов’язкові порожні поля (уточнення) не показуємо; обов’язкові порожні — як «—»
-        const rows = g.fields.filter(f => visible(f, p) && f.k !== 'name' && (f.req || f.t === 'group' || hasText(cellText(f, p))));
+        const rows = g.fields.filter(f => visible(f, p) && f.k !== 'name' && (required(f, p, d) || f.t === 'group' || hasText(cellText(f, p))));
         if (!rows.length) return [];
-        return [[{ colSpan: 2, text: g.title.toUpperCase(), color: C.grey, fontSize: z(6.5), characterSpacing: .4, margin: [0, z(3), 0, 0] }, {}],
-          ...rows.map(f => [lab(L(f)), f.t === 'seg' ? pill(f.k.startsWith('hypo') ? 'hypo' : f.k, p[f.k], z(9)) : val(cellText(f, p))])];
+        // назва групи — у першому рядку групи, щоб не лишалася сиротою внизу сторінки
+        const groupLab = { text: g.title.toUpperCase(), color: C.grey, fontSize: z(6.5), characterSpacing: .4, margin: [0, 0, 0, z(2)] };
+        return rows.map((f, ri) => [ri === 0 ? { stack: [groupLab, lab(L(f))] } : lab(L(f)),
+          f.t === 'seg' ? pill(f.k.startsWith('hypo') ? 'hypo' : f.k, p[f.k], z(9)) : val(fitV(cellText(f, p)))]);
       })] } }));
 
   // Позиції для скидів
@@ -82,21 +86,21 @@ export function buildReport(d, { kind = 'report', created = '', version = '' } =
   const positions = d.drops === 'Так' && posRows.length
     ? { layout: k.lines(true), table: { headerRows: 1, dontBreakRows: true, widths: [18, '*', 110, 56, 64],
       body: [['№', ...POSITION_FIELDS.map(L)].map(t => ({ text: t, color: C.grey })),
-        ...posRows.map((p, i) => [{ text: String(i + 1), color: C.grey }, ...POSITION_FIELDS.map(f => val(p[f.k]))])] } }
+        ...posRows.map((p, i) => [{ text: String(i + 1), color: C.grey }, ...POSITION_FIELDS.map(f => val(f.k === 'name' ? k.fit(starWidth([18, '*', 110, 56, 64], PAGE.cw), z(9))(p[f.k]) : p[f.k]))])] } }
     : kv(pos.fields, d);
 
   // Потреби та зауваги
   const needs = collectNeeds(d);
   const needsBlock = needs.length ? { layout: k.lines(false, 3), table: { widths: [LW, '*'], dontBreakRows: true,
-    body: needs.map(n => [{ text: n.where, color: C.grey }, { text: n.what, bold: true, color: n.level === 'bad' ? C.bad : C.ink }]) } }
+    body: needs.map(n => [{ text: n.where, color: C.grey }, { text: fitV(n.what), bold: n.level !== 'note', color: n.level === 'bad' ? C.bad : n.level === 'warn' ? C.warn : C.grey }]) } }
     : { text: 'Потреб і зауваг не зазначено', color: C.grey };
 
   const unit = hasText(d.unit) ? d.unit.trim().toUpperCase() : '—';
   const meta = [['Підрозділ', unit], ['Дата актуальності', fmtDate(d.date)], ['Заповнив(-ла)', d.author]];
   const status = draft
-    ? { text: `ЧЕРНЕТКА — ${errors.length ? `${errors.length} помилок, ` : ''}не для подання`, color: C.bad, bold: true }
+    ? { text: `ЧЕРНЕТКА — ${errors.length ? `${errors.length} ${plural(errors.length, 'помилка', 'помилки', 'помилок')}, ` : ''}не для подання`, color: C.bad, bold: true }
     : errors.length
-      ? { text: `Увага: ${errors.length} помилок валідації`, color: C.bad, bold: true }
+      ? { text: `Увага: ${errors.length} ${plural(errors.length, 'помилка', 'помилки', 'помилок')} — звіт неповний`, color: C.bad, bold: true }
       : { text: 'Перевірено формою · помилок немає', color: C.ok, bold: true };
 
   const content = [
@@ -128,7 +132,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '' } =
     ...(draft ? { background: () => ({ text: 'ЧЕРНЕТКА', color: '#f3d3d5', bold: true, fontSize: 78, font: THEME.head, alignment: 'center', margin: [0, 360, 0, 0] }) } : {}),
     header: cur => cur > 1 ? { margin: [PAGE.m, 18, PAGE.m, 0], fontSize: 7, color: C.grey, text: tag } : null,
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${TITLE}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${version ? ` Форма ${version}.` : ''}` },
+      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${TITLE}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${version ? ` Форма ${version}.` : ''}` },
       { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }),
   };
 }

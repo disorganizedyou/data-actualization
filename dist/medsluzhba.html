@@ -6,12 +6,12 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-aFtgpVKq64Aj7jIw5AXHWDT19bCPLFVDsd5jkORTZs4='; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-2+hTVzq22XAiEJPveT3F7/aXaz/0r8VlgSJiCBGvXIg='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Медслужба — плакати зі звітів підрозділів</title>
 <style>
 :root {
   --font: eUkraine, "Helvetica Neue", Helvetica, Arial, sans-serif; --head: eUkraineHead, var(--font);
-  --ink: #0f1720; --ink-2: #45505c; --mute: #7a8591; --bg: #f3f5f7; --paper: #fff; --line: #d7dde3; --line-2: #e8ecf0; --field: #f8fafb;
+  --ink: #0f1720; --ink-2: #45505c; --mute: #5f6b77; --bg: #f3f5f7; --paper: #fff; --line: #d7dde3; --line-2: #e8ecf0; --field: #f8fafb;
   --accent: #0f4c81; --bad: #c62828; --bad-2: #fdecec; --warn: #a15c00; --warn-2: #fff4e0; --ok: #1a7f37; --ok-2: #e7f5ec;
   --r: 12px; --r-s: 8px; --h: 44px; --max: 1100px;
 }
@@ -28,7 +28,11 @@ b { font-weight: 600; }
 .brand p { font-size: 12px; color: var(--mute); margin-top: 2px; }
 .bar-act { display: flex; gap: 8px; }
 .main { max-width: var(--max); margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
-.drop { border: 2px dashed var(--line); border-radius: var(--r); padding: 22px; text-align: center; color: var(--ink-2); background: var(--paper); display: grid; gap: 4px; }
+.drop { width: 100%; border: 2px dashed var(--line); border-radius: var(--r); padding: 22px; text-align: center; color: var(--ink-2); background: var(--paper); display: grid; gap: 4px; cursor: pointer; font: inherit; }
+.drop:hover { border-color: var(--accent); }
+.drop:disabled { cursor: wait; opacity: .6; }
+.status { color: var(--accent); font-weight: 600; }
+.btn.off { pointer-events: none; opacity: .45; }
 .drop.over { border-color: var(--accent); background: #eef4fa; }
 .drop span { font-size: 13px; color: var(--mute); }
 .tools { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -45,6 +49,7 @@ b { font-weight: 600; }
 .tbl td small { display: block; color: var(--mute); font-size: 12px; }
 .tbl .unit { font: 600 17px/1.2 var(--head); }
 .tbl .st { display: flex; flex-wrap: wrap; gap: 4px; }
+.details li.note { color: var(--mute); }
 .tbl .act { white-space: nowrap; text-align: right; }
 .tbl .act .btn { margin-left: 4px; }
 .tbl .bad { color: var(--bad); font-weight: 600; }
@@ -93,7 +98,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "09a85b0-dirty";
+const BUILD_VERSION = "v2-2d7b23b";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -179,8 +184,8 @@ const OPT = {
 const LEVELS = [
   ['asm', 'Базова домедична допомога (TCCC ASM)', 'Базова (ASM)'],
   ['cls', 'CLS (Combat Lifesaver)', 'CLS'],
-  ['cmc', 'CMC (Combat Medic Course)', 'CMC'],
-  ['cpp', 'CPP (Combat Paramedic Provider)', 'CPP'],
+  ['cmc', 'CMC (Combat Medic / Corpsman)', 'CMC'],
+  ['cpp', 'CPP (Combat Paramedic / Provider)', 'CPP'],
   ['med', 'Медична освіта (фельдшер, медсестра, лікар)', 'Медосвіта'],
 ];
 
@@ -228,7 +233,7 @@ const POINT_GROUPS = [
   { id: 'nrk', title: 'НРК — наземний роботизований комплекс', fields: [
     { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true },
     { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_reb', l: 'Обладнані РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_reb', l: 'Обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
     { k: 'nrk_cam', l: 'Обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
     { k: 'nrk_mic', l: 'Обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
     { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'необов’язково' },
@@ -267,7 +272,7 @@ const roleSection = r => ({
 const SECTIONS = [
   { id: 'general', title: 'Загальні дані', fields: [
     { k: 'unit', l: 'Підрозділ — коротка назва', pl: 'Підрозділ', v: 'unit', max: 12, req: true, ph: 'МР, 2МБ, 1 РОТА…',
-      hint: 'Так, як підрозділ називають у документах. Велика літера ставиться автоматично.' },
+      hint: 'Так, як підрозділ називають у документах. Назва автоматично запишеться великими літерами.' },
     { k: 'date', l: 'Дата актуальності даних', pl: 'Дата', t: 'date', req: true },
     { k: 'author', l: 'Позивний того, хто заповнив', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
@@ -326,22 +331,33 @@ const emptyData = () => ({ v: SCHEMA_VERSION, points: [{}], positions: [] });
 
 
 
-const digits = v => v.replace(/[\s()\-.]/g, '');
+const MAX_IMPORT_STRING = 2000;   // жорсткий ліміт довжини рядка при імпорті з файла/чернетки
+const MAX_AREA_LINES = 20;        // більше рядків у текстовому полі — помилка (інакше рядок таблиці не влізе на сторінку)
+const OTHER_MAX = 200;            // «Інше або уточнення» у групі підготовки
+
+// Пробіли, дужки, крапки, усі різновиди дефісів/тире (включно з Unicode) та нерозривний пробіл
+const digits = v => v.replace(/[\s()\-. ‐-―−]/g, '');
 function normPhone(v) {
   let n = digits(v);
+  if (/^00\d{10,15}$/.test(n)) n = '+' + n.slice(2);
   if (/^0\d{9}$/.test(n)) n = '+38' + n;
   else if (/^380\d{9}$/.test(n)) n = '+' + n;
   else if (/^80\d{9}$/.test(n)) n = '+3' + n;
   return /^\+380\d{9}$/.test(n) ? n.replace(/^(\+380)(\d{2})(\d{3})(\d{2})(\d{2})$/, '$1 $2 $3 $4 $5') : v.trim();
 }
-const isPhone = v => /^\+\d{10,15}$/.test(digits(v));
+// Український номер — рівно 9 цифр після +380; інші країни — E.164 (10–15 цифр)
+const isPhone = v => { const d = digits(v); return /^\+38/.test(d) ? /^\+380\d{9}$/.test(d) : /^\+\d{10,15}$/.test(d); };
 const num = v => parseFloat(String(v).replace(',', '.'));
-const squash = v => v.replace(/\s+/g, ' ').trim();
+const squash = v => v.replace(/[\s ]+/g, ' ').trim();
+const APOS = /[`'‘’ʼ´]/g;
 
 // MGRS: зона 1–60, літера смуги C–X (без I, O), квадрат 100 км — дві літери, далі парна кількість цифр (2–10)
 const MGRS_RE = /^(\d{1,2})([C-HJ-NP-X]) ([A-HJ-NP-Z]{2}) (\d{1,5}) (\d{1,5})$/;
+// Кириличні літери, що виглядають як латинські (розкладка не перемкнута)
+const HOMOGLYPHS = { А: 'A', В: 'B', С: 'C', Е: 'E', Н: 'H', К: 'K', М: 'M', О: 'O', Р: 'P', Т: 'T', Х: 'X', У: 'Y', І: 'I' };
 function normCoords(v) {
-  const c = v.toUpperCase().replace(/[\s,;]+/g, ''), m = c.match(/^(\d{1,2})([C-HJ-NP-X])([A-HJ-NP-Z]{2})(\d*)$/);
+  const c = v.toUpperCase().replace(/[\s ,;\-–—]+/g, '').replace(/[АВСЕНКМОРТХУІ]/g, ch => HOMOGLYPHS[ch]);
+  const m = c.match(/^(\d{1,2})([C-HJ-NP-X])([A-HJ-NP-Z]{2})(\d*)$/);
   if (!m || m[4].length % 2 !== 0 || m[4].length === 0) return squash(v);
   const h = m[4].length / 2;
   return `${+m[1]}${m[2]} ${m[3]} ${m[4].slice(0, h)} ${m[4].slice(h)}`;
@@ -353,54 +369,67 @@ function isCoords(v) {
 // Чи координати схожі на українські (зони 34–37, смуги T та U). Лише для попередження.
 const coordsInUkraine = v => { const m = v.match(MGRS_RE); return !m || (+m[1] >= 34 && +m[1] <= 37 && 'TU'.includes(m[2])); };
 
+const intNorm = v => { const t = v.trim(); return /^\d+$/.test(t) ? String(parseInt(t, 10)) : t; };
+// Element: приймаємо нікнейм, @нік:сервер або посилання matrix.to — зберігаємо лише нікнейм (локальну частину)
+const MXID_RE = /@([a-z0-9._=\-\/+]+):([a-z0-9.\-]+(?::\d+)?)/i;
+function normElement(v) {
+  const s = v.trim();
+  const m = s.match(MXID_RE);
+  if (m) return m[1];
+  if (/^https?:|matrix\.to|[\/#?]/i.test(s)) return s;            // посилання — хай ok() відхилить з підказкою
+  return s.replace(/^@/, '').replace(/:.*$/, '');
+}
+
 const KINDS = {
   phone: { ph: '+380 67 123 45 67', norm: normPhone, ok: isPhone, inputmode: 'tel',
-    msg: 'Номер телефону у форматі +380 67 123 45 67' },
+    msg: 'Номер телефону у форматі +380 67 123 45 67 (для України — рівно 9 цифр після +380)' },
   signal: { ph: 'номер або ім’я користувача',
-    norm: v => /^[\d+\s()\-.]+$/.test(v) ? normPhone(v) : v.trim().replace(/^@/, ''),
+    norm: v => /^[\d+\s()\-.‐-―]+$/.test(v.trim()) ? normPhone(v) : v.trim().replace(/^@/, ''),
     ok: v => isPhone(v) || /^[a-z][a-z0-9_]{2,31}\.\d{2,9}$/i.test(v),
     msg: 'Номер телефону або ім’я користувача Signal (наприклад, kit.07)' },
-  element: { ph: 'нікнейм, наприклад kit', norm: v => v.trim().replace(/^@/, '').replace(/:.*$/, ''),
-    ok: v => /^[a-z0-9._=\-\/+]{1,60}$/i.test(v),
-    msg: 'Лише нікнейм в Element, без @ і сервера (наприклад, kit)' },
+  element: { ph: 'нікнейм, наприклад kit', norm: normElement,
+    ok: v => /^[a-z0-9._=\-\/+]{1,60}$/i.test(v) && !/^https?$/i.test(v) && !v.includes('/'),
+    msg: 'Лише нікнейм в Element, без @, сервера й посилань (наприклад, kit)' },
   discord: { ph: 'ім’я користувача', norm: v => v.trim().replace(/^@/, ''),
     ok: v => /^[a-z0-9_.]{2,32}$/i.test(v) || /^.{2,32}#\d{4}$/.test(v),
     msg: 'Ім’я користувача Discord: латинські літери, цифри, крапка та «_»' },
-  coords: { ph: '37U DQ 12345 67890', norm: normCoords, ok: isCoords, max: 25,
-    msg: 'Координати MGRS, наприклад 37U DQ 12345 67890' },
-  kg: { ph: 'наприклад, 2,5', inputmode: 'decimal', max: 6, norm: v => v.trim().replace('.', ','),
+  coords: { ph: '37U DQ 12345 67890', norm: normCoords, ok: isCoords, max: 25, autocapitalize: 'characters',
+    msg: 'Координати MGRS латинськими літерами, наприклад 37U DQ 12345 67890' },
+  kg: { ph: 'наприклад, 2,5', inputmode: 'decimal', max: 6,
+    norm: v => { const t = v.trim().replace('.', ','); const m = t.match(/^(\d+)(,\d+)?$/); return m ? String(parseInt(m[1], 10)) + (m[2] ? m[2].replace(/0+$/, '').replace(/,$/, '') : '') : t; },
     ok: v => /^\d+(,\d+)?$/.test(v) && num(v) >= 0.1 && num(v) <= 100,
     msg: 'Число в кілограмах (від 0,1 до 100), наприклад 2,5' },
-  min: { ph: 'наприклад, 15', inputmode: 'numeric', max: 4, norm: v => v.trim(),
+  min: { ph: 'наприклад, 15', inputmode: 'numeric', max: 4, norm: intNorm,
     ok: v => /^\d{1,4}$/.test(v) && +v > 0 && +v <= 1440,
     msg: 'Ціле число хвилин від 1 до 1440, наприклад 15' },
-  count: { ph: '0', inputmode: 'numeric', max: 3, norm: v => v.trim(), ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
+  count: { ph: '0', inputmode: 'numeric', max: 3, norm: intNorm, ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
   unit: { norm: v => squash(v).toUpperCase(), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} .\-\/]{0,11}$/u.test(v) && /[\p{L}\p{N}]/u.test(v),
     msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс' },
-  callsign: { norm: squash, ok: v => /^[\p{L}\p{N}][\p{L}\p{N} '’\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
-    msg: 'Позивний: літери, цифри, пробіл, дефіс (без телефонів і посилань)' },
-  name: { norm: squash, ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
+  callsign: { norm: v => squash(v.replace(APOS, '’')), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} ’.\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
+    msg: 'Позивний: літери, цифри, пробіл, дефіс, апостроф (без телефонів і посилань)' },
+  name: { norm: v => squash(v.replace(APOS, '’')), ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
 };
 
 const kindOf = f => f.v ? KINDS[f.v] : null;
 const maxLen = f => f.max || kindOf(f)?.max || (f.t === 'area' ? 1000 : 200);
 
 // ---- Нормалізація документа: тримаємо лише відомі ключі, приводимо до рядків, застосовуємо norm ----
+const str = raw => (raw == null ? '' : String(raw)).replace(/ /g, ' ').replace(/​|﻿/g, '').slice(0, MAX_IMPORT_STRING);
+const normArea = v => v.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
 function normField(f, src, out, item, data) {
   if (f.t === 'group') {
     for (const k of groupKeys(f)) {
-      const raw = src[k];
-      const v = raw == null ? '' : String(raw).trim();
-      if (v !== '') out[k] = k.endsWith('_other') ? squash(v) : v;
+      const v = str(src[k]).trim();
+      if (v !== '') out[k] = k.endsWith('_other') ? squash(v) : intNorm(v);
     }
     return;
   }
-  const raw = src[f.k];
-  let v = raw == null ? '' : String(raw);
+  let v = str(src[f.k]);
   if (!visible(f, item)) return; // приховане поле не переносимо — застарілі дані не потраплять у звіт
   if (f.none && v.trim() === NONE) { out[f.k] = NONE; return; }
   const kind = kindOf(f);
-  v = kind?.norm && hasText(v) ? kind.norm(v) : f.t === 'area' ? v.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').trim() : v.trim();
+  v = kind?.norm && hasText(v) ? kind.norm(v) : f.t === 'area' ? normArea(v) : v.trim();
   if (v !== '') out[f.k] = v;
 }
 function normItem(fields, src) {
@@ -432,41 +461,39 @@ function normalizeData(raw) {
 // ---- Перевірка ----
 // problem: { level:'error'|'warn', path, step, section, item (індекс або undefined), label, msg }
 const problem = (level, path, sectionId, item, label, msg) => ({ level, path, step: stepOfSection(sectionId)?.id, section: sectionId, item, label, msg });
+const validISODate = v => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v;
 
 function checkValue(f, item, data, path, sectionId, idx, label, problems) {
+  const push = (p, msg, l = label) => problems.push(problem('error', p, sectionId, idx, l, msg));
   if (f.t === 'group') {
-    const keys = f.items.map(([k]) => `${f.k}_${k}`);
     let any = false;
-    for (const k of keys) {
-      const v = item[k];
-      if (hasText(v)) {
-        if (!KINDS.count.ok(v.trim())) problems.push(problem('error', `${path}${k}`, sectionId, idx, `${label} — ${f.items.find(([kk]) => `${f.k}_${kk}` === k)[2]}`, KINDS.count.msg));
-        else if (+v > 0) any = true;
-      }
+    for (const [k, , short] of f.items) {
+      const v = item[`${f.k}_${k}`];
+      if (!hasText(v)) continue;
+      if (!KINDS.count.ok(v.trim())) push(`${path}${f.k}_${k}`, KINDS.count.msg, `${label} — ${short}`);
+      else if (+v > 0) any = true;
     }
-    if (hasText(item[`${f.k}_other`])) any = true;
-    if (!any && required(f, item, data)) problems.push(problem('error', `${path}${keys[0]}`, sectionId, idx, label, 'Вкажіть кількість хоча б для одного рівня або заповніть «Інше»'));
+    const other = item[`${f.k}_other`];
+    if (hasText(other)) { any = true; if (other.length > OTHER_MAX) push(`${path}${f.k}_other`, `Задовгий текст: ${other.length} символів, максимум ${OTHER_MAX}`, `${label} — інше`); }
+    // помилка групи стоїть на шляху самої групи (points.N.training), а не на першому рівні
+    if (!any && required(f, item, data)) push(`${path}${f.k}`, 'Вкажіть кількість хоча б для одного рівня або заповніть «Інше»');
     return;
   }
   if (!visible(f, item)) return;
-  const v = item[f.k];
-  const text = hasText(v);
+  const v = item[f.k], p = path + f.k;
   if (f.none && v === NONE) return;
-  if (!text) {
-    if (required(f, item, data)) problems.push(problem('error', path + f.k, sectionId, idx, label, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'seg' || f.t === 'sel' ? 'Оберіть відповідь' : 'Обов’язкове поле'));
+  if (!hasText(v)) {
+    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'seg' || f.t === 'sel' ? 'Оберіть відповідь' : 'Обов’язкове поле');
     return;
   }
-  if (v.length > maxLen(f)) problems.push(problem('error', path + f.k, sectionId, idx, label, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`));
-  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) problems.push(problem('error', path + f.k, sectionId, idx, label, 'Недопустиме значення — оберіть зі списку'));
-  if (f.t === 'date') {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(v))) problems.push(problem('error', path + f.k, sectionId, idx, label, 'Дата у форматі РРРР-ММ-ДД'));
-  }
+  if (v.length > maxLen(f)) { push(p, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`); return; }
+  if (f.t === 'area' && v.split('\n').length > MAX_AREA_LINES) { push(p, `Забагато рядків (${v.split('\n').length}), максимум ${MAX_AREA_LINES} — скоротіть текст`); return; }
+  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, 'Недопустиме значення — оберіть зі списку'); return; }
+  if (f.t === 'date' && !validISODate(v)) { push(p, 'Дата у форматі РРРР-ММ-ДД'); return; }
   const kind = kindOf(f);
-  if (kind && !kind.ok(v.trim())) problems.push(problem('error', path + f.k, sectionId, idx, label, kind.msg));
-  else if (kind === KINDS.count && f.min != null && +v < f.min) problems.push(problem('error', path + f.k, sectionId, idx, label, `Не менше ${f.min}`));
+  if (kind && !kind.ok(v.trim())) push(p, kind.msg);
+  else if (kind === KINDS.count && f.min != null && +v < f.min) push(p, `Не менше ${f.min}`);
 }
-
-const itemLabel = (s, i) => `${s.list.item} ${i + 1}`;
 
 function validateData(d, { today = todayISO() } = {}) {
   const problems = [];
@@ -474,25 +501,24 @@ function validateData(d, { today = todayISO() } = {}) {
     if (s.fields) for (const f of s.fields) checkValue(f, d, d, '', s.id, undefined, f.l, problems);
     if (s.list) {
       const list = s.list, items = Array.isArray(d[list.key]) ? d[list.key] : [];
-      const on = visible({ showIf: list.showIf }, d);
-      if (!on) continue;
+      if (!visible({ showIf: list.showIf }, d)) continue;
       if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, `Додайте хоча б одну ${list.addText}`));
-      items.forEach((it, i) => {
-        for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.l, problems);
-      });
+      items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.l, problems); });
     }
   }
   crossChecks(d, problems, today);
   return problems;
 }
 
+const NRK_FEATURES = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']];
+
 function crossChecks(d, problems, today) {
   const push = (level, path, sectionId, item, label, msg) => problems.push(problem(level, path, sectionId, item, label, msg));
   // Дата
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d.date || '') && !Number.isNaN(Date.parse(d.date))) {
+  if (validISODate(d.date || '')) {
     const diff = daysBetween(d.date, today);
     if (diff < -1) push('error', 'date', 'general', undefined, 'Дата актуальності даних', 'Дата в майбутньому');
-    else if (diff > 45) push('warn', 'date', 'general', undefined, 'Дата актуальності даних', `Даним уже ${diff} днів — переконайтеся, що вони актуальні, або поставте сьогоднішню дату`);
+    else if (diff > 45) push('warn', 'date', 'general', undefined, 'Дата актуальності даних', `Даним уже ${diff} ${plural(diff, 'день', 'дні', 'днів')} — переконайтеся, що вони актуальні, або поставте сьогоднішню дату`);
   }
   // Однаковий номер у всіх чергових
   const phones = ROLES.map(r => d[`${r.role}_phone`]).filter(v => hasText(v) && v !== NONE);
@@ -513,8 +539,10 @@ function crossChecks(d, problems, today) {
       if (seenCoords.has(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', `Ті самі координати, що й у точки ${seenCoords.get(c) + 1}`); else seenCoords.set(c, i);
       if (!coordsInUkraine(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
     }
-    if (p.nrk === 'Є' && p.nrk_count === '1' && ['nrk_reb', 'nrk_cam', 'nrk_mic'].some(k => p[k] === 'Частково'))
-      push('error', `points.${i}.nrk_count`, 'points', i, 'Кількість НРК', 'За одного НРК відповідь «Частково» неможлива — оберіть «Так» або «Ні»');
+    if (p.nrk === 'Є' && hasText(p.nrk_count) && +p.nrk_count === 1) {
+      const bad = NRK_FEATURES.find(([k]) => p[k] === 'Частково');
+      if (bad) push('error', `points.${i}.${bad[0]}`, 'points', i, `НРК — ${bad[1]}`, 'НРК лише один, тому «Частково» не підходить — оберіть «Так» або «Ні» (або виправте кількість)');
+    }
     if (p.supplied === 'Так' && p.need === 'Є')
       push('warn', `points.${i}.need`, 'points', i, 'Потреба в дозабезпеченні', 'Точка забезпечена повністю, але є потреба в дозабезпеченні — перевірте відповіді');
     if ((p.supplied === 'Ні' || p.supplied === 'Частково') && p.need === 'Немає')
@@ -535,6 +563,9 @@ function crossChecks(d, problems, today) {
 
 const errorsOf = problems => problems.filter(p => p.level === 'error');
 const warningsOf = problems => problems.filter(p => p.level === 'warn');
+// Помилки «нових полів» (НРК, гіпотермія, хімзахист) — для звітів старої форми це очікувано
+const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note'];
+const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)
 function progressOf(d) {
@@ -552,7 +583,6 @@ function progressOf(d) {
   return { total, done };
 }
 
-// Короткі підписи для зведень
 const POINT_FLAG_KEYS = ['supplied', 'need', 'nrk', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe'];
 
 // ---- src/shared/codec.mjs ----
@@ -628,30 +658,40 @@ const LEGACY_RE = /https:\/\/dani\.invalid\/v1#([A-Za-z0-9_-]+)/;
 function findMarker(raw) {
   const m = raw.match(MARK_RE);
   if (m) {
+    if (m[1].length > MAX_PAYLOAD * 4 / 3) throw new Error('Завеликі дані у файлі');
     const bytes = fromB64url(m[1]);
-    if (bytes.length > MAX_PAYLOAD) throw new Error('Завеликі дані у файлі');
     if (crc32(bytes) !== m[2]) throw new Error('Дані у файлі пошкоджено (не збігається контрольна сума)');
     return new TextDecoder().decode(bytes);
   }
   let l = raw.match(LEGACY_RE);
-  if (!l) for (const h of raw.matchAll(/\/URI\s*<([0-9A-Fa-f\s]+)>/g)) {
+  if (!l) for (const h of raw.matchAll(/\/URI\s*<([0-9A-Fa-f\s]{1,2000000})>/g)) {
     l = h[1].replace(/\s/g, '').replace(/../g, x => String.fromCharCode(parseInt(x, 16))).match(LEGACY_RE);
     if (l) break;
   }
-  if (l) return new TextDecoder().decode(fromB64url(l[1]));
+  if (l) {
+    if (l[1].length > MAX_PAYLOAD * 4 / 3) throw new Error('Завеликі дані у файлі');
+    return new TextDecoder().decode(fromB64url(l[1]));
+  }
   return null;
 }
 
-// Знаходить потік вкладеного файла data.json (записаного pdfkit) і повертає його байти та фільтр
+// Знаходить потік вкладеного файла data.json (записаного pdfkit) і повертає його байти та фільтр.
+// Лінійний пошук через indexOf — жодних regex по всьому файлу (великий сторонній PDF не має вішати вкладку).
 function findEmbeddedStream(bytes) {
   const raw = latin1(bytes);
-  const re = /<<[^]*?\/Type\s*\/EmbeddedFile[^]*?>>\s*stream\r?\n/g;
-  let m;
-  while ((m = re.exec(raw))) {
-    const dict = m[0];
-    const len = dict.match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/);
+  let i = 0;
+  while ((i = raw.indexOf('/EmbeddedFile', i)) !== -1) {
+    const d0 = raw.lastIndexOf('<<', i);
+    const s0 = raw.indexOf('stream', i);
+    i += 13;
+    if (d0 === -1 || s0 === -1 || s0 - d0 > 4000) continue;
+    const dict = raw.slice(d0, s0);
+    const len = dict.match(/\/Length\s+(\d{1,9})(?!\s+\d+\s+R)/);
     if (!len) continue;
-    const start = m.index + m[0].length, n = +len[1];
+    let start = s0 + 6;
+    if (raw[start] === '\r') start++;
+    if (raw[start] === '\n') start++;
+    const n = +len[1];
     if (n > MAX_PAYLOAD * 4 || start + n > bytes.length) continue;
     return { data: bytes.subarray(start, start + n), deflated: /\/Filter\s*\/FlateDecode/.test(dict) };
   }
@@ -670,15 +710,26 @@ async function readPdfBytes(bytes, { inflate } = {}) {
     const data = emb.deflated ? await (inflate || defaultInflate)(emb.data) : emb.data;
     return parsePayload(new TextDecoder().decode(data));
   }
-  throw new Error('У цьому файлі немає даних форми. Оберіть PDF, який було сформовано саме цією формою.');
+  throw new Error('У цьому файлі немає даних анкети. Оберіть PDF-звіт або чернетку, сформовані анкетою актуалізації даних.');
 }
 
 async function defaultInflate(data) {
   if (typeof DecompressionStream === 'undefined') throw new Error('Браузер не підтримує розпакування вкладення — відкрийте файл у новішому браузері');
-  const ds = new DecompressionStream('deflate');
-  const w = ds.writable.getWriter(); w.write(data); w.close();
-  return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+  // Читаємо порціями й зупиняємось, щойно розпаковане перевищить ліміт (захист від «бомби» стиснення)
+  const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate')).getReader();
+  const chunks = []; let total = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_PAYLOAD) { await reader.cancel(); throw new Error('Завеликі дані у файлі'); }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total); let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
 }
+const inflateLimit = MAX_PAYLOAD;
 
 // Властивості для docDefinition pdfmake: вкладення + маркер в Info
 function pdfEmbedding(payload) {
@@ -726,11 +777,20 @@ const T = s => s.pt || s.title;
 
 // Чи значення «негативне» для підсвічування у зведеннях
 const NEGATIVE = new Set(['Ні', 'Немає', 'Частково', 'Є, нестабільна']);
+// Відсутність НРК чи інтернету — не дефект забезпечення, а особливість точки (жовтий, не червоний)
+const SOFT_KEYS = new Set(['nrk', 'net']);
 const flagColor = (key, v) => {
   if (!hasText(v)) return C.rule;
   if (key === 'need') return v === 'Є' ? C.bad : C.ok;             // потреба «Є» — погано
   if (v === 'Частково' || v === 'Є, нестабільна') return C.warn;
-  return NEGATIVE.has(v) ? C.bad : C.ok;
+  if (NEGATIVE.has(v)) return SOFT_KEYS.has(key) ? C.warn : C.bad;
+  return C.ok;
+};
+// Ширина «зіркової» колонки таблиці pdfmake: усе, що лишилося після фіксованих колонок і внутрішніх відступів
+const starWidth = (widths, total, pad = 6) => {
+  const stars = widths.filter(w => w === '*').length || 1;
+  const fixed = widths.reduce((a, w) => a + (typeof w === 'number' ? w : 0), 0);
+  return Math.max(20, (total - fixed - widths.length * pad) / stars);
 };
 
 function kit(sc = 1) {
@@ -778,7 +838,9 @@ function kit(sc = 1) {
   const pill = (key, v, size = z(8)) => hasText(v)
     ? { text: v.trim(), bold: true, color: flagColor(key, v), fontSize: size }
     : { text: '—', color: C.rule, fontSize: size };
-  return { z, val, lab, sec, badge, lines, wrapTo, pill };
+  // Переносить лише задовгі «слова» (посилання, нікнейми), щоб колонка не розтягувалась за межі сторінки
+  const fit = (w, size, font) => x => hasText(x) && x.split(/\s+/).some(word => textWidth(word, font || '600 100px eUkraine') * size > w * .9) ? wrapTo(w, size, font)(x) : x;
+  return { z, val, lab, sec, badge, lines, wrapTo, pill, fit };
 }
 
 const keepHeadings = (cur, after) => cur.headlineLevel === 1 && after.length === 0;
@@ -806,14 +868,14 @@ function collectNeeds(d) {
   (d.points || []).forEach((p, i) => {
     const at = `Точка ${i + 1}${hasText(p.name) ? ` «${p.name.trim()}»` : ''}`;
     if (p.need === 'Є' && hasText(p.need_note)) out.push({ where: at, what: 'Дозабезпечення: ' + p.need_note.trim(), level: 'bad' });
-    if ((p.supplied === 'Ні' || p.supplied === 'Частково') && hasText(p.supplied_note)) out.push({ where: at, what: `Майно (${p.supplied.toLowerCase()}): бракує — ${p.supplied_note.trim()}`, level: 'bad' });
+    if ((p.supplied === 'Ні' || p.supplied === 'Частково') && hasText(p.supplied_note)) out.push({ where: at, what: `Майно (${p.supplied.toLowerCase()}): ${p.supplied_note.trim()}`, level: 'bad' });
     const hypo = [['hypo_heat', 'хімічних грілок'], ['hypo_bag', 'спальників'], ['hypo_ready', 'Ready-Heat']].filter(([k]) => p[k] === NONE).map(([, n]) => n);
     if (hypo.length) out.push({ where: at, what: 'Немає засобів проти гіпотермії: ' + hypo.join(', '), level: 'bad' });
     if (p.ppe === NONE) out.push({ where: at, what: 'Немає засобів хімзахисту', level: 'bad' });
     if (p.ppe === 'Частково') out.push({ where: at, what: 'Хімзахист частково' + (hasText(p.ppe_note) ? ': ' + p.ppe_note.trim() : ''), level: 'warn' });
-    if (p.nrk === NONE) out.push({ where: at, what: 'НРК немає', level: 'warn' });
-    if (p.net === NONE) out.push({ where: at, what: 'Інтернету немає', level: 'warn' });
-    if (trainingTotal(p) === 0 && !hasText(p.training_other)) out.push({ where: at, what: 'Підготовлений персонал не вказано', level: 'bad' });
+    if (p.nrk === NONE) out.push({ where: at, what: 'НРК немає', level: 'note' });
+    if (p.net === NONE) out.push({ where: at, what: 'Інтернету немає', level: 'note' });
+    if (trainingTotal(p) === 0 && !hasText(p.training_other)) out.push({ where: at, what: 'Підготовленого персоналу не вказано', level: 'bad' });
   });
   if (d.mp_help === 'Так' && hasText(d.mp_help_note)) out.push({ where: 'Медпункт', what: 'Потрібна допомога у формуванні скидів: ' + d.mp_help_note.trim(), level: 'bad' });
   if (d.mp_std === 'Є' && hasText(d.mp_std_qty)) out.push({ where: 'Медпункт', what: 'Скиди встановленого зразка: ' + d.mp_std_qty.trim(), level: 'warn' });
@@ -821,14 +883,15 @@ function collectNeeds(d) {
 }
 
 // d — нормалізовані дані; opts.kind 'report' | 'draft'; opts.created — ISO-рядок часу формування; opts.version — версія збірки
-function buildReport(d, { kind = 'report', created = '', version = '' } = {}) {
+function buildReport(d, { kind = 'report', created = '', version = '', regenerated = '' } = {}) {
   const k = kit(1), { z, val, lab, sec, pill } = k;
   const pts = sectionById('points'), pos = sectionById('drops'), algo = sectionById('algo'), mp = sectionById('mphelp');
   const LW = +(PAGE.cw * .3).toFixed(1);
   const draft = kind === 'draft';
   const problems = validateData(d), errors = errorsOf(problems);
+  const VW = starWidth([LW, '*'], PAGE.cw), fitV = k.fit(VW, z(9));
   const kv = (fields, o) => ({ layout: k.lines(false), table: { widths: [LW, '*'], dontBreakRows: true,
-    body: fields.filter(f => visible(f, o)).map(f => [lab(L(f)), val(cellText(f, o))]) } });
+    body: fields.filter(f => visible(f, o)).map(f => [lab(L(f)), val(fitV(cellText(f, o)))]) } });
 
   // Контакти чергових
   const CL = 78, CW = +((PAGE.cw - CL - 6 - ROLES.length * 12) / ROLES.length).toFixed(1), wrapC = k.wrapTo(CW, z(10));
@@ -840,15 +903,16 @@ function buildReport(d, { kind = 'report', created = '', version = '' } = {}) {
   // Зведення по точках
   const points = (d.points || []).filter(nonEmpty);
   const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
+  const SUMW = [12, '*', 48, 44, 44, 36, 46, 46, 46, 40], fitName = k.fit(starWidth(SUMW, PAGE.cw), z(8.5));
   const summary = points.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true,
-    widths: [14, '*', 50, 46, 50, 36, 40, 40, 48, 40],
+    widths: SUMW,
     body: [[head('№'), head('Точка'), head('Майно'), head('Потреба'), head('НРК'), head('Грілки'), head('Спальники'), head('Ready-Heat'), head('Хімзахист'), head('Підгот.')],
       ...points.map((p, i) => [
         { text: String(i + 1), color: THEME.grey, fontSize: z(8) },
-        { stack: [{ text: hasText(p.name) ? p.name.trim() : '—', bold: true, fontSize: z(8.5) }, { text: p.coords || '', color: C.grey, fontSize: z(7) }] },
+        { stack: [{ text: hasText(p.name) ? fitName(p.name.trim()) : '—', bold: true, fontSize: z(8.5) }, { text: p.coords || '', color: C.grey, fontSize: z(7) }] },
         pill('supplied', p.supplied), pill('need', p.need), pill('nrk', nrkShort(p)),
         pill('hypo', p.hypo_heat), pill('hypo', p.hypo_bag), pill('hypo', p.hypo_ready), pill('ppe', p.ppe),
-        { text: trainingTotal(p) > 0 ? people(trainingTotal(p)) : hasText(p.training_other) ? 'див.' : '—', bold: trainingTotal(p) > 0, color: trainingTotal(p) > 0 ? C.ink : C.bad, fontSize: z(8) },
+        { text: trainingTotal(p) > 0 ? people(trainingTotal(p)) : hasText(p.training_other) ? 'інше ↓' : '—', bold: trainingTotal(p) > 0, color: trainingTotal(p) > 0 ? C.ink : hasText(p.training_other) ? C.grey : C.bad, fontSize: z(8) },
       ])] } } : null;
 
   // Детально по точках
@@ -856,10 +920,12 @@ function buildReport(d, { kind = 'report', created = '', version = '' } = {}) {
     body: [[{ colSpan: 2, text: [{ text: `Точка ${i + 1}`, color: C.ink }, hasText(p.name) ? '   ' + p.name.trim() : ''], bold: true, fontSize: z(10.5) }, {}],
       ...POINT_GROUPS.flatMap(g => {
         // необов’язкові порожні поля (уточнення) не показуємо; обов’язкові порожні — як «—»
-        const rows = g.fields.filter(f => visible(f, p) && f.k !== 'name' && (f.req || f.t === 'group' || hasText(cellText(f, p))));
+        const rows = g.fields.filter(f => visible(f, p) && f.k !== 'name' && (required(f, p, d) || f.t === 'group' || hasText(cellText(f, p))));
         if (!rows.length) return [];
-        return [[{ colSpan: 2, text: g.title.toUpperCase(), color: C.grey, fontSize: z(6.5), characterSpacing: .4, margin: [0, z(3), 0, 0] }, {}],
-          ...rows.map(f => [lab(L(f)), f.t === 'seg' ? pill(f.k.startsWith('hypo') ? 'hypo' : f.k, p[f.k], z(9)) : val(cellText(f, p))])];
+        // назва групи — у першому рядку групи, щоб не лишалася сиротою внизу сторінки
+        const groupLab = { text: g.title.toUpperCase(), color: C.grey, fontSize: z(6.5), characterSpacing: .4, margin: [0, 0, 0, z(2)] };
+        return rows.map((f, ri) => [ri === 0 ? { stack: [groupLab, lab(L(f))] } : lab(L(f)),
+          f.t === 'seg' ? pill(f.k.startsWith('hypo') ? 'hypo' : f.k, p[f.k], z(9)) : val(fitV(cellText(f, p)))]);
       })] } }));
 
   // Позиції для скидів
@@ -867,21 +933,21 @@ function buildReport(d, { kind = 'report', created = '', version = '' } = {}) {
   const positions = d.drops === 'Так' && posRows.length
     ? { layout: k.lines(true), table: { headerRows: 1, dontBreakRows: true, widths: [18, '*', 110, 56, 64],
       body: [['№', ...POSITION_FIELDS.map(L)].map(t => ({ text: t, color: C.grey })),
-        ...posRows.map((p, i) => [{ text: String(i + 1), color: C.grey }, ...POSITION_FIELDS.map(f => val(p[f.k]))])] } }
+        ...posRows.map((p, i) => [{ text: String(i + 1), color: C.grey }, ...POSITION_FIELDS.map(f => val(f.k === 'name' ? k.fit(starWidth([18, '*', 110, 56, 64], PAGE.cw), z(9))(p[f.k]) : p[f.k]))])] } }
     : kv(pos.fields, d);
 
   // Потреби та зауваги
   const needs = collectNeeds(d);
   const needsBlock = needs.length ? { layout: k.lines(false, 3), table: { widths: [LW, '*'], dontBreakRows: true,
-    body: needs.map(n => [{ text: n.where, color: C.grey }, { text: n.what, bold: true, color: n.level === 'bad' ? C.bad : C.ink }]) } }
+    body: needs.map(n => [{ text: n.where, color: C.grey }, { text: fitV(n.what), bold: n.level !== 'note', color: n.level === 'bad' ? C.bad : n.level === 'warn' ? C.warn : C.grey }]) } }
     : { text: 'Потреб і зауваг не зазначено', color: C.grey };
 
   const unit = hasText(d.unit) ? d.unit.trim().toUpperCase() : '—';
   const meta = [['Підрозділ', unit], ['Дата актуальності', fmtDate(d.date)], ['Заповнив(-ла)', d.author]];
   const status = draft
-    ? { text: `ЧЕРНЕТКА — ${errors.length ? `${errors.length} помилок, ` : ''}не для подання`, color: C.bad, bold: true }
+    ? { text: `ЧЕРНЕТКА — ${errors.length ? `${errors.length} ${plural(errors.length, 'помилка', 'помилки', 'помилок')}, ` : ''}не для подання`, color: C.bad, bold: true }
     : errors.length
-      ? { text: `Увага: ${errors.length} помилок валідації`, color: C.bad, bold: true }
+      ? { text: `Увага: ${errors.length} ${plural(errors.length, 'помилка', 'помилки', 'помилок')} — звіт неповний`, color: C.bad, bold: true }
       : { text: 'Перевірено формою · помилок немає', color: C.ok, bold: true };
 
   const content = [
@@ -913,7 +979,7 @@ function buildReport(d, { kind = 'report', created = '', version = '' } = {}) {
     ...(draft ? { background: () => ({ text: 'ЧЕРНЕТКА', color: '#f3d3d5', bold: true, fontSize: 78, font: THEME.head, alignment: 'center', margin: [0, 360, 0, 0] }) } : {}),
     header: cur => cur > 1 ? { margin: [PAGE.m, 18, PAGE.m, 0], fontSize: 7, color: C.grey, text: tag } : null,
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${TITLE}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${version ? ` Форма ${version}.` : ''}` },
+      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${TITLE}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${version ? ` Форма ${version}.` : ''}` },
       { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }),
   };
 }
@@ -928,7 +994,8 @@ function buildReport(d, { kind = 'report', created = '', version = '' } = {}) {
 
 const MIN_SCALE = 0.5;
 
-function buildPoster(d, sc = 1, { version = '' } = {}) {
+// warn — напис-попередження у шапці (наприклад, «ЧЕРНЕТКА» або «звіт із помилками»)
+function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
   const k = kit(sc), { z, val, sec } = k;
   const pts = sectionById('points'), pos = sectionById('drops'), algo = sectionById('algo');
   const unit = hasText(d.unit) ? d.unit.trim().toUpperCase() : '—';
@@ -938,7 +1005,8 @@ function buildPoster(d, sc = 1, { version = '' } = {}) {
     { width: '*', stack: [
       { text: 'Довідка чергового', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
       { text: 'Медична служба: чергові, точки передачі поранених, медичні скиди', color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
-      { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] }] },
+      { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] },
+      ...(warn ? [{ text: warn.toUpperCase(), color: '#fff', background: C.bad, bold: true, fontSize: z(8), margin: [0, z(6), 0, 0] }] : [])] },
     { width: UNIT_W, stack: [
       { text: 'Підрозділ', color: C.grey, fontSize: z(8), alignment: 'right' },
       { text: unit, font: THEME.head, bold: true, fontSize: unitFs, lineHeight: .95, noWrap: true, alignment: 'right' }] },
@@ -971,19 +1039,20 @@ function buildPoster(d, sc = 1, { version = '' } = {}) {
     const feats = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([kk]) => p[kk] === 'Так' || p[kk] === 'Частково').map(([kk, n]) => p[kk] === 'Частково' ? `${n} (част.)` : n);
     return { stack: [{ text: nrkShort(p), bold: true, fontSize: z(9.5) }, ...(feats.length ? [{ text: feats.join(', '), color: C.grey, fontSize: z(8) }] : [])] };
   };
+  const PW = [z(18), '*', z(116), z(72), z(72), '*'], PSW = starWidth(PW, PAGE.cw), fitP11 = k.fit(PSW, z(11)), fitP9 = k.fit(PSW, z(9.5));
   const points = pointRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true,
-    widths: [z(18), '*', z(116), z(72), z(72), '*'],
+    widths: PW,
     body: [[head('№'), head('Назва / орієнтир'), head('Координати MGRS'), head('Інтернет'), head('НРК'), head('Зв’язок з точкою')],
-      ...pointRows.map((p, i) => [num(i), val(p.name, z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
+      ...pointRows.map((p, i) => [num(i), val(fitP11(p.name), z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
         { stack: [val(p.net, z(9.5)), ...(hasText(p.net_note) ? [{ text: p.net_note.trim(), color: C.grey, fontSize: z(8.5) }] : [])] },
-        nrkCell(p), val(p.contact, z(9.5))])] } }
+        nrkCell(p), val(fitP9(p.contact), z(9.5))])] } }
     : { text: 'Точок не вказано', color: C.grey };
 
   const posRows = (d.positions || []).filter(nonEmpty);
   const positions = d.drops === 'Так' && posRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true,
     widths: [z(18), '*', z(112), z(70), z(70)],
     body: [[head('№'), head('Назва / позивний'), head('Координати MGRS'), head('Вага скиду'), head('Підліт')],
-      ...posRows.map((p, i) => [num(i), val(p.name, z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
+      ...posRows.map((p, i) => [num(i), val(k.fit(starWidth([z(18), '*', z(112), z(70), z(70)], PAGE.cw), z(11))(p.name), z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
         val(hasText(p.weight) ? p.weight.trim() + ' кг' : '', z(11)), val(hasText(p.flight) ? p.flight.trim() + ' хв' : '', z(11))])] } }
     : { text: d.drops === 'Ні' ? 'Позицій для медичних скидів немає' : '—', color: C.grey };
 
@@ -1011,7 +1080,7 @@ function buildPoster(d, sc = 1, { version = '' } = {}) {
       sec(T(pos)), positions,
       sec(T(algo)), ...algoBlock],
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `Актуально на ${fmtDate(d.date) || '—'}. Тимчасові дані (забезпечення, потреби, підготовка) — у повному звіті підрозділу.` },
+      { text: `Актуально на ${fmtDate(d.date) || '—'}. Змінні дані (забезпечення, потреби, підготовка) — у повному звіті підрозділу.${warn ? ' ' + warn + '.' : ''}` },
       { text: total > 1 ? `${cur} / ${total}` : '', alignment: 'right', width: 40 }] }),
   };
 }
@@ -1020,7 +1089,7 @@ function buildPoster(d, sc = 1, { version = '' } = {}) {
 function buildContactsSheet(reports, { version = '' } = {}) {
   const k = kit(1), { z, val, sec } = k;
   const rows = reports.map(r => r.data);
-  const CW = +((PAGE.cw - 60 - 4 * 8) / 3).toFixed(1), wrap = k.wrapTo(CW - 30, z(8));
+  const CW = +((PAGE.cw - 60 - 6 - 3 * 12) / 3).toFixed(1), wrap = k.wrapTo(CW - 30, z(8));
   const cell = (d, role) => ({ stack: [
     { text: hasText(d[`${role}_callsign`]) ? d[`${role}_callsign`].trim() : '—', bold: true, fontSize: z(9.5) },
     ...CONTACT.filter(c => c.icon).map(c => ({ columnGap: z(4), columns: [
@@ -1033,7 +1102,7 @@ function buildContactsSheet(reports, { version = '' } = {}) {
     defaultStyle: { font: 'eU', fontSize: 9, lineHeight: 1.15, color: C.ink },
     content: [
       { text: 'Чергові підрозділів', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
-      { text: `Зведення зі звітів ${rows.length} підрозділів · службові контакти чергових акаунтів`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      { text: `${rows.length === 1 ? 'Зі звіту 1 підрозділу' : `Зі звітів ${rows.length} ${plural(rows.length, 'підрозділу', 'підрозділів', 'підрозділів')}`} · службові контакти чергових акаунтів`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
       sec('Контакти'),
       { layout: k.lines(true, 5), table: { headerRows: 1, dontBreakRows: true, widths: [60, CW, CW, CW],
         body: [[{ text: 'Підрозділ', color: C.grey, fontSize: z(7.5) }, ...ROLES.map(r => ({ columnGap: z(5), columns: [k.badge(r.role, z(14)), { width: '*', text: ROLE_STYLE[r.role].name, bold: true, fontSize: z(8.5) }] }))],
@@ -1043,6 +1112,32 @@ function buildContactsSheet(reports, { version = '' } = {}) {
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
       { text: 'Зведення контактів чергових. Дата біля назви підрозділу — дата актуальності його звіту.' },
       { text: total > 1 ? `${cur} / ${total}` : '', alignment: 'right', width: 40 }] }),
+  };
+}
+
+// Зведення потреб і зауваг усіх підрозділів — для планування дозабезпечення
+function buildNeedsSheet(reports, { version = '' } = {}) {
+  const k = kit(1), { z, sec } = k;
+  const LW = 70, WW = 110, fitT = k.fit(starWidth([LW, WW, '*'], PAGE.cw), z(9));
+  const blocks = reports.flatMap(r => {
+    const needs = collectNeeds(r.data).filter(n => n.level !== 'note');
+    const unit = hasText(r.data.unit) ? r.data.unit.trim().toUpperCase() : '—';
+    return needs.map((n, i) => [i === 0 ? { stack: [{ text: unit, font: THEME.head, bold: true, fontSize: z(11) }, { text: fmtDate(r.data.date), color: C.grey, fontSize: z(7) }] } : '',
+      { text: n.where, color: C.grey, fontSize: z(8.5) }, { text: fitT(n.what), bold: n.level === 'bad', color: n.level === 'bad' ? C.bad : C.ink, fontSize: z(9) }]);
+  });
+  const total = reports.length;
+  return {
+    pageSize: 'A4', pageMargins: [PAGE.m, PAGE.m, PAGE.m, 40],
+    info: { title: 'Потреби підрозділів — зведення', creator: `Медслужба — плакати ${version}`.trim(), producer: 'pdfmake' },
+    defaultStyle: { font: 'eU', fontSize: 9, lineHeight: 1.15, color: C.ink },
+    content: [
+      { text: 'Потреби та зауваги підрозділів', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
+      { text: `${total === 1 ? 'Зі звіту 1 підрозділу' : `Зі звітів ${total} ${plural(total, 'підрозділу', 'підрозділів', 'підрозділів')}`} · червоним — брак майна чи засобів, чорним — зауваги`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      sec('Потреби'),
+      blocks.length ? { layout: k.lines(false, 4), table: { widths: [LW, WW, '*'], dontBreakRows: true, body: blocks } } : { text: 'Потреб не зазначено', color: C.grey },
+    ],
+    footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
+      { text: 'Зведення потреб. Дата біля назви підрозділу — дата актуальності його звіту.' }, { text: total > 1 ? `${cur} / ${total}` : '', alignment: 'right', width: 40 }] }),
   };
 }
 
@@ -1059,35 +1154,48 @@ function buildContactsSheet(reports, { version = '' } = {}) {
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const app = $('#app');
+const MAX_PDF_BYTES = 50 * 1024 * 1024;
+const SMALL_SCALE = 0.7;   // дрібніший масштаб плаката — попереджаємо, що текст замалий для стіни
 
-// reports: [{ id, file, data, kind, legacy, created, errors, warnings, needs }]
+// reports: [{ id, file, data, kind, legacy, created, v, errors, warnings, needs, open, fit }]
 let reports = [];
 let seq = 0;
 let busy = false;
+let status = '';           // текст поточної операції (показується замість кнопок)
+const byUnit = (a, b) => (a.data.unit || '').localeCompare(b.data.unit || '', 'uk', { numeric: true, sensitivity: 'base' });
+const sorted = () => [...reports].sort(byUnit);
+const kindName = (r, acc = false) => r.kind === 'draft' ? (acc ? 'чернетку' : 'чернетка') : (acc ? 'звіт' : 'звіт');
+
+// Помилки, що не зводяться до «нові поля ще не заповнені» (для звітів старої форми)
+const realErrors = r => r.legacy ? r.errors.filter(e => !isNewFieldError(e)) : r.errors;
+const isClean = r => r.kind === 'report' && !r.errors.length;
 
 function render() {
-  const rows = [...reports].sort((a, b) => (a.data.unit || '').localeCompare(b.data.unit || '', 'uk'));
+  const rows = sorted();
+  const dis = busy ? ' disabled' : '';
   app.innerHTML = `
   <header class="bar"><div class="bar-in">
     <div class="brand"><h1>Медслужба — плакати зі звітів</h1><p>${esc(TITLE)}</p></div>
     <div class="bar-act">
-      <label class="btn primary" tabindex="0" id="openl">Відкрити звіти PDF<input type="file" id="open" accept=".pdf,application/pdf" multiple hidden></label>
-      ${reports.length ? '<button type="button" class="btn" id="clear">Прибрати всі</button>' : ''}
+      <label class="btn primary${busy ? ' off' : ''}" tabindex="0" id="openl">Відкрити звіти PDF<input type="file" id="open" accept=".pdf,application/pdf" multiple hidden${dis}></label>
+      ${reports.length ? `<button type="button" class="btn" id="clear"${dis}>Прибрати всі</button>` : ''}
     </div>
   </div></header>
   <main class="main">
-    <div class="drop" id="drop">
+    <button type="button" class="drop" id="drop"${dis}>
       <b>Перетягніть сюди PDF-звіти підрозділів</b>
-      <span>або натисніть «Відкрити звіти PDF». Можна кілька файлів одразу. Дані не залишають цей пристрій.</span>
-    </div>
+      <span>або натисніть, щоб обрати файли. Можна кілька одразу. Дані не залишають цей пристрій.</span>
+    </button>
+    ${busy ? `<p class="status" role="status">${esc(status || 'Працюю…')}</p>` : ''}
     ${reports.length ? `
     <div class="tools">
-      <button type="button" class="btn primary" id="all" ${busy ? 'disabled' : ''}>Усі плакати одним PDF (${reports.length})</button>
-      <button type="button" class="btn" id="sheet" ${busy ? 'disabled' : ''}>Зведення контактів чергових</button>
+      <button type="button" class="btn primary" id="all"${dis}>Усі плакати одним PDF (${reports.length})</button>
+      <button type="button" class="btn" id="sheet"${dis}>Зведення контактів чергових</button>
+      <button type="button" class="btn" id="needs"${dis}>Зведення потреб</button>
     </div>
     <table class="tbl"><thead><tr><th>Підрозділ</th><th>Дата</th><th>Заповнив</th><th>Стан</th><th>Точки</th><th>Потреби</th><th></th></tr></thead>
     <tbody>${rows.map(rowHtml).join('')}</tbody></table>
-    <p class="hint">Плакат — це «Довідка чергового» на один аркуш A4: чергові, точки передачі, позиції для скидів, алгоритм. Тимчасові дані (забезпечення, потреби, підготовка) дивіться у звіті підрозділу — його можна перегенерувати кнопкою «Звіт».</p>
+    <p class="hint">Плакат — це «Довідка чергового» на один аркуш A4: чергові, точки передачі, позиції для скидів, алгоритм. Змінні дані (забезпечення, потреби, підготовка) дивіться у звіті підрозділу або у «Зведенні потреб»; звіт можна сформувати заново кнопкою «Звіт».</p>
     ` : `<section class="empty">
       <h2>Як це працює</h2>
       <ol>
@@ -1100,26 +1208,33 @@ function render() {
   </main>`;
 }
 
+function stateBadges(r) {
+  const out = [];
+  if (r.kind === 'draft') out.push('<span class="badge warn">чернетка</span>');
+  const real = realErrors(r), fresh = r.errors.length - real.length;
+  if (r.legacy) out.push(`<span class="badge grey" title="Файл старої версії форми">стара форма${fresh ? ` · ${fresh} нових ${plural(fresh, 'поле', 'поля', 'полів')} не заповнено` : ''}</span>`);
+  if (real.length) out.push(`<span class="badge bad">${real.length} ${plural(real.length, 'помилка', 'помилки', 'помилок')}</span>`);
+  if (!r.errors.length && r.kind === 'report') out.push('<span class="badge ok">✓ повний</span>');
+  if (r.warnings.length) out.push(`<span class="badge grey">${r.warnings.length} зауваж.</span>`);
+  return out.join('');
+}
+
 function rowHtml(r) {
-  const d = r.data;
-  const state = r.kind === 'draft' ? '<span class="badge warn">чернетка</span>'
-    : r.errors.length ? `<span class="badge bad">${r.errors.length} ${plural(r.errors.length, 'помилка', 'помилки', 'помилок')}</span>`
-    : '<span class="badge ok">✓ повний</span>';
-  const legacy = r.legacy ? '<span class="badge grey" title="Файл старої версії форми: без даних про НРК, гіпотермію, хімзахист">стара форма</span>' : '';
-  const warns = r.warnings.length ? `<span class="badge grey">${r.warnings.length} зауваж.</span>` : '';
+  const d = r.data, dis = busy ? ' disabled' : '';
   const bad = r.needs.filter(n => n.level === 'bad').length;
+  const needs = r.needs.filter(n => n.level !== 'note');
   return `<tr data-id="${r.id}">
     <td><b class="unit">${esc(hasText(d.unit) ? d.unit.toUpperCase() : '—')}</b><small>${esc(r.file)}</small></td>
     <td>${esc(fmtDate(d.date) || '—')}</td>
     <td>${esc(d.author || '—')}</td>
-    <td class="st">${state}${legacy}${warns}</td>
+    <td><div class="st">${stateBadges(r)}</div></td>
     <td>${(d.points || []).length}${d.drops === 'Так' ? ` <small>· ${(d.positions || []).length} поз.</small>` : ''}</td>
-    <td>${r.needs.length ? `<span class="${bad ? 'bad' : ''}">${r.needs.length}</span>` : '—'}</td>
+    <td>${needs.length ? `<span class="${bad ? 'bad' : ''}">${needs.length}</span>` : '—'}</td>
     <td class="act">
-      <button type="button" class="btn sm primary" data-poster="${r.id}" ${busy ? 'disabled' : ''}>Плакат</button>
-      <button type="button" class="btn sm" data-report="${r.id}" ${busy ? 'disabled' : ''} title="Перегенерувати повний звіт із даних файла">Звіт</button>
-      <button type="button" class="btn sm" data-details="${r.id}">Деталі</button>
-      <button type="button" class="del" data-del="${r.id}" aria-label="Прибрати">✕</button>
+      <button type="button" class="btn sm primary" data-poster="${r.id}"${dis}>Плакат</button>
+      <button type="button" class="btn sm" data-report="${r.id}"${dis} title="Сформувати повний звіт заново з даних цього файла">Звіт</button>
+      <button type="button" class="btn sm" data-details="${r.id}" aria-expanded="${r.open}">Деталі</button>
+      <button type="button" class="del" data-del="${r.id}"${dis} aria-label="Прибрати зі списку">✕</button>
     </td>
   </tr>${r.open ? `<tr class="det"><td colspan="7">${detailsHtml(r)}</td></tr>` : ''}`;
 }
@@ -1132,58 +1247,71 @@ function detailsHtml(r) {
   return `<div class="details">
     <div><h4>Чергові</h4><div class="roles">${roles}</div></div>
     <div><h4>Потреби та зауваги (${r.needs.length})</h4>${needs}</div>
-    ${probs.length ? `<div><h4>Проблеми валідації (${probs.length})</h4><ul class="probs">${probs.map(p => `<li class="${p.level}">${esc(p.item != null ? `${p.path.startsWith('points') ? 'Точка' : 'Позиція'} ${p.item + 1} · ` : '')}${esc(p.label)}: ${esc(p.msg)}</li>`).join('')}</ul></div>` : ''}
+    ${probs.length ? `<div><h4>Помилки та зауваження (${probs.length})</h4><ul class="probs">${probs.map(p => `<li class="${p.level}">${esc(p.item != null ? `${p.path.startsWith('points') ? 'Точка' : 'Позиція'} ${p.item + 1} · ` : '')}${esc(p.label)}: ${esc(p.msg)}</li>`).join('')}</ul></div>` : ''}
     ${r.created ? `<p class="hint">Файл сформовано ${esc(new Date(r.created).toLocaleString('uk-UA'))}${r.v ? `, схема v${r.v}` : ''}.</p>` : ''}
   </div>`;
 }
 
+// Пріоритет файлів одного підрозділу: повний звіт завжди важливіший за чернетку; серед однакових — новіший за датою
+const rank = r => `${r.kind === 'report' ? 1 : 0}|${r.data.date || ''}`;
+
 async function addFiles(files) {
   const list = [...files].filter(f => f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)));
   if (!list.length) { toast('Оберіть PDF-файли, сформовані анкетою.'); return; }
-  let added = 0, failed = [];
+  busy = true; status = `Читаю ${list.length} ${plural(list.length, 'файл', 'файли', 'файлів')}…`; render();
+  let added = 0; const notes = [], failed = [];
   for (const f of list) {
-    if (f.size > 50 * 1024 * 1024) { failed.push(`${f.name}: завеликий`); continue; }
+    if (f.size > MAX_PDF_BYTES) { failed.push(`${f.name}: завеликий`); continue; }
     try {
       const p = await readPdfBytes(new Uint8Array(await f.arrayBuffer()));
       const data = normalizeData(p.data);
       const problems = validateData(data);
       const r = { id: ++seq, file: f.name, data, kind: p.kind, legacy: !!(p.legacy || p.data.migratedFrom), created: p.created, v: p.v,
-        errors: errorsOf(problems), warnings: warningsOf(problems), needs: collectNeeds(data), open: false };
-      // той самий підрозділ — залишаємо новіший за датою
+        errors: errorsOf(problems), warnings: warningsOf(problems), needs: collectNeeds(data), open: false, fit: null };
       const same = reports.find(x => hasText(x.data.unit) && hasText(data.unit) && x.data.unit.toUpperCase() === data.unit.toUpperCase());
       if (same) {
-        // новіша дата перемагає; за однакової дати повний звіт важливіший за чернетку
-        const rank = x => `${x.data.date || ''}|${x.kind === 'report' ? 1 : 0}`;
-        if (rank(r) > rank(same)) { reports = reports.filter(x => x !== same); reports.push(r); toast(`${data.unit.toUpperCase()}: замінено ${same.kind === 'draft' ? 'чернетку' : 'звіт'} від ${fmtDate(same.data.date)} на ${r.kind === 'draft' ? 'чернетку' : 'звіт'} від ${fmtDate(data.date)}.`); }
-        else toast(`${data.unit.toUpperCase()}: уже відкрито ${same.kind === 'draft' ? 'чернетку' : 'звіт'} від ${fmtDate(same.data.date)}, файл ${f.name} пропущено.`);
-      } else reports.push(r);
-      added++;
+        if (rank(r) > rank(same)) { reports = reports.filter(x => x !== same); reports.push(r); notes.push(`${data.unit.toUpperCase()}: ${kindName(same, true)} від ${fmtDate(same.data.date)} замінено на ${kindName(r, true)} від ${fmtDate(data.date)}`); added++; }
+        else notes.push(`${data.unit.toUpperCase()}: уже відкрито ${kindName(same, true)} від ${fmtDate(same.data.date)}, файл ${f.name} пропущено`);
+      } else { reports.push(r); added++; }
     } catch (e) { failed.push(`${f.name}: ${e && e.message || 'не вдалося прочитати'}`); }
   }
-  render();
+  busy = false; status = ''; render();
   if (failed.length) alert('Не вдалося відкрити:\n' + failed.join('\n'));
-  else if (added) toast(`Відкрито ${added} ${plural(added, 'звіт', 'звіти', 'звітів')}.`);
+  const head = added ? `Відкрито ${added} ${plural(added, 'звіт', 'звіти', 'звітів')}.` : '';
+  if (head || notes.length) toast([head, ...notes].filter(Boolean).join(' '), notes.length ? 9000 : 5000);
 }
 
-async function renderPosterBlob(d) {
-  let res;
-  for (let sc = 1; sc >= MIN_SCALE - 1e-9; sc = +(sc - .05).toFixed(2)) {
-    let pages = 0;
-    const dd = buildPoster(d, sc, { version: BUILD_VERSION }), footer = dd.footer;
-    dd.footer = (cur, total) => { pages = total; return footer(cur, total); };
-    const blob = await pdfMake.createPdf(dd).getBlob();
-    res = { blob, pages, sc };
-    if (pages === 1) break;
+// Підбір масштабу плаката під один аркуш: двійковий пошук серед кроків 1.00 … MIN_SCALE
+const SCALES = Array.from({ length: Math.round((1 - MIN_SCALE) / .05) + 1 }, (_, i) => +(1 - i * .05).toFixed(2));
+const posterWarn = r => r.kind === 'draft' ? 'Чернетка — дані не перевірені' : realErrors(r).length ? 'Звіт із помилками — дані неповні' : r.legacy ? 'Стара форма — без даних про НРК' : '';
+async function pagesAt(r, sc) {
+  let pages = 0;
+  const dd = buildPoster(r.data, sc, { version: BUILD_VERSION, warn: posterWarn(r) }), footer = dd.footer;
+  dd.footer = (cur, total) => { pages = total; return footer(cur, total); };
+  await pdfMake.createPdf(dd).getBlob();
+  return pages;
+}
+async function fitPoster(r) {
+  if (r.fit) return r.fit;
+  let lo = 0, hi = SCALES.length - 1, best = null;           // SCALES[0] = 1 — найбільший
+  if (await pagesAt(r, SCALES[0]) === 1) best = 0;
+  else {
+    lo = 1;
+    if (await pagesAt(r, SCALES[hi]) !== 1) { r.fit = { sc: SCALES[hi], pages: await pagesAt(r, SCALES[hi]) }; return r.fit; }
+    best = hi;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (await pagesAt(r, SCALES[mid]) === 1) { best = mid; hi = mid; } else lo = mid + 1; }
   }
-  return res;
+  r.fit = { sc: SCALES[best], pages: 1 };
+  return r.fit;
 }
+const posterDoc = (r, sc) => buildPoster(r.data, sc, { version: BUILD_VERSION, warn: posterWarn(r) });
 
-async function withBusy(fn) {
+async function withBusy(label, fn) {
   if (busy) return;
-  busy = true; render();
+  busy = true; status = label; render();
   try { await loadFonts(); await fn(); }
   catch (e) { console.error(e); alert('Не вдалося створити PDF: ' + (e && e.message || e)); }
-  finally { busy = false; render(); }
+  finally { busy = false; status = ''; render(); }
 }
 function saveBlob(blob, name) {
   const a = document.createElement('a');
@@ -1192,68 +1320,79 @@ function saveBlob(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 const nameOf = (prefix, d) => safeFileName([prefix, d.unit?.toUpperCase(), d.date].filter(hasText).join('_')) + '.pdf';
+const confirmUnclean = (r, what) => isClean(r) || confirm(`${r.data.unit || 'Підрозділ'}: це ${r.kind === 'draft' ? 'чернетка' : 'звіт із помилками або старої форми'}. ${what} матиме позначку-попередження. Продовжити?`);
 
 async function poster(r) {
-  await withBusy(async () => {
-    const { blob, pages } = await renderPosterBlob(r.data);
-    if (pages > 1 && !confirm(`Плакат «${r.data.unit || ''}» не вміщується на один аркуш A4 навіть з найменшим шрифтом (${pages} стор.). Все одно завантажити?`)) return;
+  if (!confirmUnclean(r, 'Плакат')) return;
+  await withBusy(`Готую плакат «${r.data.unit || ''}»…`, async () => {
+    const fit = await fitPoster(r);
+    if (fit.pages > 1 && !confirm(`Плакат «${r.data.unit || ''}» не вміщується на один аркуш A4 навіть з найменшим шрифтом (${fit.pages} стор.). Усе одно завантажити?`)) return;
+    if (fit.pages === 1 && fit.sc < SMALL_SCALE && !confirm(`Щоб уміститись на A4, текст плаката «${r.data.unit || ''}» зменшено до ${Math.round(fit.sc * 100)} %. Для стіни може бути дрібно — друкуйте на A3. Продовжити?`)) return;
+    const blob = await pdfMake.createPdf(posterDoc(r, fit.sc)).getBlob();
     saveBlob(blob, nameOf('Plakat', r.data));
   });
 }
 async function allPosters() {
-  await withBusy(async () => {
-    // Кожен плакат підбирає свій масштаб; збираємо сторінки в один документ
+  const unclean = reports.filter(r => !isClean(r));
+  let list = sorted();
+  if (unclean.length) {
+    const skip = confirm(`${unclean.length} ${plural(unclean.length, 'файл', 'файли', 'файлів')} — чернетки або звіти з помилками (${unclean.map(r => r.data.unit || r.file).join(', ')}). Пропустити їх?\n\nOK — пропустити, Скасувати — друкувати з позначкою-попередженням.`);
+    if (skip) list = list.filter(isClean);
+    if (!list.length) { toast('Немає повних звітів для друку.'); return; }
+  }
+  await withBusy('Готую плакати…', async () => {
     const docs = [];
-    for (const r of [...reports].sort((a, b) => (a.data.unit || '').localeCompare(b.data.unit || '', 'uk'))) {
-      let chosen = null;
-      for (let sc = 1; sc >= MIN_SCALE - 1e-9; sc = +(sc - .05).toFixed(2)) {
-        let pages = 0;
-        const dd = buildPoster(r.data, sc, { version: BUILD_VERSION }), footer = dd.footer;
-        dd.footer = (cur, total) => { pages = total; return footer(cur, total); };
-        await pdfMake.createPdf(dd).getBlob();
-        chosen = buildPoster(r.data, sc, { version: BUILD_VERSION });
-        if (pages === 1) break;
-      }
-      docs.push(chosen);
+    for (const [i, r] of list.entries()) {
+      status = `Плакат ${i + 1} з ${list.length}: ${r.data.unit || r.file}…`; const st = $('.status', app); if (st) st.textContent = status;
+      const fit = await fitPoster(r);
+      docs.push(posterDoc(r, fit.sc));
     }
     const merged = { ...docs[0], info: { title: 'Довідки чергових — усі підрозділи', creator: `Медслужба — плакати ${BUILD_VERSION}`, producer: 'pdfmake' },
       content: docs.map((d, i) => ({ stack: d.content, fontSize: d.defaultStyle.fontSize, lineHeight: d.defaultStyle.lineHeight, ...(i ? { pageBreak: 'before' } : {}) })),
       footer: (cur, total) => ({ margin: [32, 14, 32, 0], fontSize: 6.5, color: '#6b6b6b', columns: [
         { text: 'Довідки чергових підрозділів. Дата актуальності — у заголовку кожного аркуша.' }, { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }) };
     const blob = await pdfMake.createPdf(merged).getBlob();
-    saveBlob(blob, safeFileName(`Plakaty_usi_${reports.length}`) + '.pdf');
+    saveBlob(blob, safeFileName(`Plakaty_usi_${docs.length}`) + '.pdf');
   });
 }
 async function sheet() {
-  await withBusy(async () => {
-    const dd = buildContactsSheet([...reports].sort((a, b) => (a.data.unit || '').localeCompare(b.data.unit || '', 'uk')), { version: BUILD_VERSION });
+  await withBusy('Готую зведення контактів…', async () => {
+    const dd = buildContactsSheet(sorted(), { version: BUILD_VERSION });
     saveBlob(await pdfMake.createPdf(dd).getBlob(), safeFileName('Cherhovi_zvedennia') + '.pdf');
   });
 }
+async function needsSheet() {
+  await withBusy('Готую зведення потреб…', async () => {
+    const dd = buildNeedsSheet(sorted(), { version: BUILD_VERSION });
+    saveBlob(await pdfMake.createPdf(dd).getBlob(), safeFileName('Potreby_zvedennia') + '.pdf');
+  });
+}
 async function report(r) {
-  await withBusy(async () => {
-    const dd = buildReport(r.data, { kind: r.kind, created: new Date().toISOString(), version: BUILD_VERSION });
+  await withBusy(`Формую звіт «${r.data.unit || ''}»…`, async () => {
+    const dd = buildReport(r.data, { kind: r.kind, created: r.created || new Date().toISOString(), version: BUILD_VERSION, regenerated: new Date().toISOString() });
     saveBlob(await pdfMake.createPdf(dd).getBlob(), nameOf(r.kind === 'draft' ? 'Chernetka' : 'Zvit_med', r.data));
   });
 }
 
 app.addEventListener('click', e => {
   const t = e.target.closest('button');
-  if (!t) return;
+  if (!t || t.disabled) return;
   const byId = id => reports.find(r => r.id === +id);
-  if (t.dataset.poster) poster(byId(t.dataset.poster));
+  if (t.id === 'drop') $('#open').click();
+  else if (t.dataset.poster) poster(byId(t.dataset.poster));
   else if (t.dataset.report) report(byId(t.dataset.report));
-  else if (t.dataset.details) { const r = byId(t.dataset.details); r.open = !r.open; render(); }
+  else if (t.dataset.details) { const r = byId(t.dataset.details); r.open = !r.open; render(); $(`[data-details="${r.id}"]`, app)?.focus(); }
   else if (t.dataset.del) { reports = reports.filter(r => r.id !== +t.dataset.del); render(); }
   else if (t.id === 'all') allPosters();
   else if (t.id === 'sheet') sheet();
-  else if (t.id === 'clear') { if (confirm('Прибрати всі відкриті звіти?')) { reports = []; render(); } }
+  else if (t.id === 'needs') needsSheet();
+  else if (t.id === 'clear') { if (confirm('Прибрати всі відкриті звіти зі списку?')) { reports = []; render(); } }
 });
 app.addEventListener('change', e => { if (e.target.id === 'open') { addFiles(e.target.files); e.target.value = ''; } });
-app.addEventListener('keydown', e => { if (e.target.id === 'openl' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#open').click(); } });
+app.addEventListener('keydown', e => { if (e.target.id === 'openl' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); if (!busy) $('#open').click(); } });
 addEventListener('dragover', e => { e.preventDefault(); $('#drop')?.classList.add('over'); });
 addEventListener('dragleave', e => { if (!e.relatedTarget) $('#drop')?.classList.remove('over'); });
-addEventListener('drop', e => { e.preventDefault(); $('#drop')?.classList.remove('over'); addFiles(e.dataTransfer.files); });
+addEventListener('drop', e => { e.preventDefault(); $('#drop')?.classList.remove('over'); if (!busy) addFiles(e.dataTransfer.files); });
 
 let toastTimer = null;
 function toast(msg, ms = 5000) {

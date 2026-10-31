@@ -30,8 +30,8 @@ export const OPT = {
 export const LEVELS = [
   ['asm', 'Базова домедична допомога (TCCC ASM)', 'Базова (ASM)'],
   ['cls', 'CLS (Combat Lifesaver)', 'CLS'],
-  ['cmc', 'CMC (Combat Medic Course)', 'CMC'],
-  ['cpp', 'CPP (Combat Paramedic Provider)', 'CPP'],
+  ['cmc', 'CMC (Combat Medic / Corpsman)', 'CMC'],
+  ['cpp', 'CPP (Combat Paramedic / Provider)', 'CPP'],
   ['med', 'Медична освіта (фельдшер, медсестра, лікар)', 'Медосвіта'],
 ];
 
@@ -79,7 +79,7 @@ export const POINT_GROUPS = [
   { id: 'nrk', title: 'НРК — наземний роботизований комплекс', fields: [
     { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true },
     { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_reb', l: 'Обладнані РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_reb', l: 'Обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
     { k: 'nrk_cam', l: 'Обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
     { k: 'nrk_mic', l: 'Обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
     { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'необов’язково' },
@@ -118,7 +118,7 @@ const roleSection = r => ({
 export const SECTIONS = [
   { id: 'general', title: 'Загальні дані', fields: [
     { k: 'unit', l: 'Підрозділ — коротка назва', pl: 'Підрозділ', v: 'unit', max: 12, req: true, ph: 'МР, 2МБ, 1 РОТА…',
-      hint: 'Так, як підрозділ називають у документах. Велика літера ставиться автоматично.' },
+      hint: 'Так, як підрозділ називають у документах. Назва автоматично запишеться великими літерами.' },
     { k: 'date', l: 'Дата актуальності даних', pl: 'Дата', t: 'date', req: true },
     { k: 'author', l: 'Позивний того, хто заповнив', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },

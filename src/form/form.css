@@ -1,7 +1,7 @@
 :root {
   --font: eUkraine, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --head: eUkraineHead, var(--font);
-  --ink: #0f1720; --ink-2: #45505c; --mute: #7a8591;
+  --ink: #0f1720; --ink-2: #45505c; --mute: #5f6b77;
   --bg: #f3f5f7; --paper: #ffffff; --line: #d7dde3; --line-2: #e8ecf0; --field: #f8fafb;
   --accent: #0f4c81; --accent-2: #e8f0f8;
   --bad: #c62828; --bad-2: #fdecec; --warn: #a15c00; --warn-2: #fff4e0; --ok: #1a7f37; --ok-2: #e7f5ec;
@@ -9,7 +9,7 @@
   --sh: 0 1px 2px rgba(15,23,32,.06), 0 1px 1px rgba(15,23,32,.04);
 }
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 132px; }
 body { margin: 0; font: 400 16px/1.45 var(--font); color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 [hidden] { display: none !important; }
 h1, h2, h3, h4, p, ul, ol { margin: 0; }
@@ -27,7 +27,7 @@ b, strong { font-weight: 600; }
 .bar-act { display: flex; gap: 8px; flex: none; }
 .prog { height: 3px; background: var(--line-2); }
 .prog i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
-.steps { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 6px 12px; max-width: calc(var(--max) + 0px); margin: 0 auto; scroll-snap-type: x proximity; }
+.steps { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 6px 12px; max-width: var(--max); margin: 0 auto; scroll-behavior: smooth; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 28px), transparent); }
 .steps::-webkit-scrollbar { display: none; }
 .stp { flex: none; display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px 0 6px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2); cursor: pointer; font-size: 13px; scroll-snap-align: center; position: relative; }
 .stp i { font-style: normal; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--line-2); color: var(--ink-2); }
@@ -68,7 +68,7 @@ input[type=text], input[type=date], textarea {
 input[type=date] { display: block; }
 textarea { height: auto; min-height: 76px; padding: 11px 14px; resize: vertical; line-height: 1.45; }
 input:focus, textarea:focus { border-color: var(--accent); background: var(--paper); box-shadow: 0 0 0 3px rgba(15,76,129,.15); }
-input::placeholder, textarea::placeholder { color: #9aa5b1; }
+input::placeholder, textarea::placeholder { color: #6b7682; }
 input:disabled { color: var(--mute); background: var(--line-2); }
 .fld.bad input, .fld.bad textarea, .lvl.bad input { border-color: var(--bad); background: #fff; }
 .fld.bad .seg { border-color: var(--bad); }
@@ -80,7 +80,8 @@ input:disabled { color: var(--mute); background: var(--line-2); }
 @keyframes flash { 0% { background: var(--warn-2); } 100% { background: transparent; } }
 
 .seg { display: flex; gap: 0; border: 1.5px solid var(--line); border-radius: var(--r-s); overflow: hidden; background: var(--field); }
-.seg-btn { flex: 1 1 0; min-width: 0; height: var(--h); border: 0; background: transparent; color: var(--ink-2); cursor: pointer; font-size: 15px; padding: 0 6px; border-left: 1.5px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg-btn { flex: 1 1 0; min-width: 0; min-height: var(--h); border: 0; background: transparent; color: var(--ink-2); cursor: pointer; font-size: 14px; line-height: 1.2; padding: 6px 4px; border-left: 1.5px solid var(--line); overflow-wrap: break-word; }
+@media (max-width: 420px) { .seg-btn { font-size: 13px; } }
 .seg-btn:first-child { border-left: 0; }
 .seg-btn.on { background: var(--ink); color: #fff; font-weight: 600; }
 .seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
@@ -167,7 +168,8 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
 
 @media (min-width: 640px) {
   .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .fields .fld:has(textarea), .fields .fld:has(.seg), .fields fieldset.group { grid-column: 1 / -1; }
+  .fields fieldset.group { grid-column: 1 / -1; }
+  .fields :is(.fld:has(textarea), .fld:has(.seg)) { grid-column: 1 / -1; }
   .sec[data-section="general"] .fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sec[data-section="kb"] .fields, .sec[data-section="s4"] .fields, .sec[data-section="mp"] .fields { grid-template-columns: 1fr; }
   .sum { grid-template-columns: repeat(5, minmax(0, 1fr)); }

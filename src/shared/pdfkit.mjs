@@ -33,11 +33,20 @@ export const T = s => s.pt || s.title;
 
 // Чи значення «негативне» для підсвічування у зведеннях
 export const NEGATIVE = new Set(['Ні', 'Немає', 'Частково', 'Є, нестабільна']);
+// Відсутність НРК чи інтернету — не дефект забезпечення, а особливість точки (жовтий, не червоний)
+const SOFT_KEYS = new Set(['nrk', 'net']);
 export const flagColor = (key, v) => {
   if (!hasText(v)) return C.rule;
   if (key === 'need') return v === 'Є' ? C.bad : C.ok;             // потреба «Є» — погано
   if (v === 'Частково' || v === 'Є, нестабільна') return C.warn;
-  return NEGATIVE.has(v) ? C.bad : C.ok;
+  if (NEGATIVE.has(v)) return SOFT_KEYS.has(key) ? C.warn : C.bad;
+  return C.ok;
+};
+// Ширина «зіркової» колонки таблиці pdfmake: усе, що лишилося після фіксованих колонок і внутрішніх відступів
+export const starWidth = (widths, total, pad = 6) => {
+  const stars = widths.filter(w => w === '*').length || 1;
+  const fixed = widths.reduce((a, w) => a + (typeof w === 'number' ? w : 0), 0);
+  return Math.max(20, (total - fixed - widths.length * pad) / stars);
 };
 
 export function kit(sc = 1) {
@@ -85,7 +94,9 @@ export function kit(sc = 1) {
   const pill = (key, v, size = z(8)) => hasText(v)
     ? { text: v.trim(), bold: true, color: flagColor(key, v), fontSize: size }
     : { text: '—', color: C.rule, fontSize: size };
-  return { z, val, lab, sec, badge, lines, wrapTo, pill };
+  // Переносить лише задовгі «слова» (посилання, нікнейми), щоб колонка не розтягувалась за межі сторінки
+  const fit = (w, size, font) => x => hasText(x) && x.split(/\s+/).some(word => textWidth(word, font || '600 100px eUkraine') * size > w * .9) ? wrapTo(w, size, font)(x) : x;
+  return { z, val, lab, sec, badge, lines, wrapTo, pill, fit };
 }
 
 export const keepHeadings = (cur, after) => cur.headlineLevel === 1 && after.length === 0;

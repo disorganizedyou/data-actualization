@@ -3,24 +3,35 @@
 
 import { SECTIONS, LEVELS, ROLES, CONTACT, NONE, SCHEMA_VERSION, POINT_FIELDS, POSITION_FIELDS,
   groupKeys, visible, required, stepOfSection, listDef } from './schema.mjs';
-import { hasText, daysBetween, todayISO } from './text.mjs';
+import { hasText, daysBetween, todayISO, plural } from './text.mjs';
 
-const digits = v => v.replace(/[\s()\-.]/g, '');
+export const MAX_IMPORT_STRING = 2000;   // жорсткий ліміт довжини рядка при імпорті з файла/чернетки
+export const MAX_AREA_LINES = 20;        // більше рядків у текстовому полі — помилка (інакше рядок таблиці не влізе на сторінку)
+export const OTHER_MAX = 200;            // «Інше або уточнення» у групі підготовки
+
+// Пробіли, дужки, крапки, усі різновиди дефісів/тире (включно з Unicode) та нерозривний пробіл
+const digits = v => v.replace(/[\s()\-. ‐-―−]/g, '');
 export function normPhone(v) {
   let n = digits(v);
+  if (/^00\d{10,15}$/.test(n)) n = '+' + n.slice(2);
   if (/^0\d{9}$/.test(n)) n = '+38' + n;
   else if (/^380\d{9}$/.test(n)) n = '+' + n;
   else if (/^80\d{9}$/.test(n)) n = '+3' + n;
   return /^\+380\d{9}$/.test(n) ? n.replace(/^(\+380)(\d{2})(\d{3})(\d{2})(\d{2})$/, '$1 $2 $3 $4 $5') : v.trim();
 }
-export const isPhone = v => /^\+\d{10,15}$/.test(digits(v));
+// Український номер — рівно 9 цифр після +380; інші країни — E.164 (10–15 цифр)
+export const isPhone = v => { const d = digits(v); return /^\+38/.test(d) ? /^\+380\d{9}$/.test(d) : /^\+\d{10,15}$/.test(d); };
 export const num = v => parseFloat(String(v).replace(',', '.'));
-const squash = v => v.replace(/\s+/g, ' ').trim();
+const squash = v => v.replace(/[\s ]+/g, ' ').trim();
+const APOS = /[`'‘’ʼ´]/g;
 
 // MGRS: зона 1–60, літера смуги C–X (без I, O), квадрат 100 км — дві літери, далі парна кількість цифр (2–10)
 const MGRS_RE = /^(\d{1,2})([C-HJ-NP-X]) ([A-HJ-NP-Z]{2}) (\d{1,5}) (\d{1,5})$/;
+// Кириличні літери, що виглядають як латинські (розкладка не перемкнута)
+const HOMOGLYPHS = { А: 'A', В: 'B', С: 'C', Е: 'E', Н: 'H', К: 'K', М: 'M', О: 'O', Р: 'P', Т: 'T', Х: 'X', У: 'Y', І: 'I' };
 export function normCoords(v) {
-  const c = v.toUpperCase().replace(/[\s,;]+/g, ''), m = c.match(/^(\d{1,2})([C-HJ-NP-X])([A-HJ-NP-Z]{2})(\d*)$/);
+  const c = v.toUpperCase().replace(/[\s ,;\-–—]+/g, '').replace(/[АВСЕНКМОРТХУІ]/g, ch => HOMOGLYPHS[ch]);
+  const m = c.match(/^(\d{1,2})([C-HJ-NP-X])([A-HJ-NP-Z]{2})(\d*)$/);
   if (!m || m[4].length % 2 !== 0 || m[4].length === 0) return squash(v);
   const h = m[4].length / 2;
   return `${+m[1]}${m[2]} ${m[3]} ${m[4].slice(0, h)} ${m[4].slice(h)}`;
@@ -32,54 +43,67 @@ export function isCoords(v) {
 // Чи координати схожі на українські (зони 34–37, смуги T та U). Лише для попередження.
 export const coordsInUkraine = v => { const m = v.match(MGRS_RE); return !m || (+m[1] >= 34 && +m[1] <= 37 && 'TU'.includes(m[2])); };
 
+const intNorm = v => { const t = v.trim(); return /^\d+$/.test(t) ? String(parseInt(t, 10)) : t; };
+// Element: приймаємо нікнейм, @нік:сервер або посилання matrix.to — зберігаємо лише нікнейм (локальну частину)
+const MXID_RE = /@([a-z0-9._=\-\/+]+):([a-z0-9.\-]+(?::\d+)?)/i;
+function normElement(v) {
+  const s = v.trim();
+  const m = s.match(MXID_RE);
+  if (m) return m[1];
+  if (/^https?:|matrix\.to|[\/#?]/i.test(s)) return s;            // посилання — хай ok() відхилить з підказкою
+  return s.replace(/^@/, '').replace(/:.*$/, '');
+}
+
 export const KINDS = {
   phone: { ph: '+380 67 123 45 67', norm: normPhone, ok: isPhone, inputmode: 'tel',
-    msg: 'Номер телефону у форматі +380 67 123 45 67' },
+    msg: 'Номер телефону у форматі +380 67 123 45 67 (для України — рівно 9 цифр після +380)' },
   signal: { ph: 'номер або ім’я користувача',
-    norm: v => /^[\d+\s()\-.]+$/.test(v) ? normPhone(v) : v.trim().replace(/^@/, ''),
+    norm: v => /^[\d+\s()\-.‐-―]+$/.test(v.trim()) ? normPhone(v) : v.trim().replace(/^@/, ''),
     ok: v => isPhone(v) || /^[a-z][a-z0-9_]{2,31}\.\d{2,9}$/i.test(v),
     msg: 'Номер телефону або ім’я користувача Signal (наприклад, kit.07)' },
-  element: { ph: 'нікнейм, наприклад kit', norm: v => v.trim().replace(/^@/, '').replace(/:.*$/, ''),
-    ok: v => /^[a-z0-9._=\-\/+]{1,60}$/i.test(v),
-    msg: 'Лише нікнейм в Element, без @ і сервера (наприклад, kit)' },
+  element: { ph: 'нікнейм, наприклад kit', norm: normElement,
+    ok: v => /^[a-z0-9._=\-\/+]{1,60}$/i.test(v) && !/^https?$/i.test(v) && !v.includes('/'),
+    msg: 'Лише нікнейм в Element, без @, сервера й посилань (наприклад, kit)' },
   discord: { ph: 'ім’я користувача', norm: v => v.trim().replace(/^@/, ''),
     ok: v => /^[a-z0-9_.]{2,32}$/i.test(v) || /^.{2,32}#\d{4}$/.test(v),
     msg: 'Ім’я користувача Discord: латинські літери, цифри, крапка та «_»' },
-  coords: { ph: '37U DQ 12345 67890', norm: normCoords, ok: isCoords, max: 25,
-    msg: 'Координати MGRS, наприклад 37U DQ 12345 67890' },
-  kg: { ph: 'наприклад, 2,5', inputmode: 'decimal', max: 6, norm: v => v.trim().replace('.', ','),
+  coords: { ph: '37U DQ 12345 67890', norm: normCoords, ok: isCoords, max: 25, autocapitalize: 'characters',
+    msg: 'Координати MGRS латинськими літерами, наприклад 37U DQ 12345 67890' },
+  kg: { ph: 'наприклад, 2,5', inputmode: 'decimal', max: 6,
+    norm: v => { const t = v.trim().replace('.', ','); const m = t.match(/^(\d+)(,\d+)?$/); return m ? String(parseInt(m[1], 10)) + (m[2] ? m[2].replace(/0+$/, '').replace(/,$/, '') : '') : t; },
     ok: v => /^\d+(,\d+)?$/.test(v) && num(v) >= 0.1 && num(v) <= 100,
     msg: 'Число в кілограмах (від 0,1 до 100), наприклад 2,5' },
-  min: { ph: 'наприклад, 15', inputmode: 'numeric', max: 4, norm: v => v.trim(),
+  min: { ph: 'наприклад, 15', inputmode: 'numeric', max: 4, norm: intNorm,
     ok: v => /^\d{1,4}$/.test(v) && +v > 0 && +v <= 1440,
     msg: 'Ціле число хвилин від 1 до 1440, наприклад 15' },
-  count: { ph: '0', inputmode: 'numeric', max: 3, norm: v => v.trim(), ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
+  count: { ph: '0', inputmode: 'numeric', max: 3, norm: intNorm, ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
   unit: { norm: v => squash(v).toUpperCase(), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} .\-\/]{0,11}$/u.test(v) && /[\p{L}\p{N}]/u.test(v),
     msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс' },
-  callsign: { norm: squash, ok: v => /^[\p{L}\p{N}][\p{L}\p{N} '’\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
-    msg: 'Позивний: літери, цифри, пробіл, дефіс (без телефонів і посилань)' },
-  name: { norm: squash, ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
+  callsign: { norm: v => squash(v.replace(APOS, '’')), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} ’.\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
+    msg: 'Позивний: літери, цифри, пробіл, дефіс, апостроф (без телефонів і посилань)' },
+  name: { norm: v => squash(v.replace(APOS, '’')), ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
 };
 
 export const kindOf = f => f.v ? KINDS[f.v] : null;
 export const maxLen = f => f.max || kindOf(f)?.max || (f.t === 'area' ? 1000 : 200);
 
 // ---- Нормалізація документа: тримаємо лише відомі ключі, приводимо до рядків, застосовуємо norm ----
+const str = raw => (raw == null ? '' : String(raw)).replace(/ /g, ' ').replace(/​|﻿/g, '').slice(0, MAX_IMPORT_STRING);
+const normArea = v => v.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
 function normField(f, src, out, item, data) {
   if (f.t === 'group') {
     for (const k of groupKeys(f)) {
-      const raw = src[k];
-      const v = raw == null ? '' : String(raw).trim();
-      if (v !== '') out[k] = k.endsWith('_other') ? squash(v) : v;
+      const v = str(src[k]).trim();
+      if (v !== '') out[k] = k.endsWith('_other') ? squash(v) : intNorm(v);
     }
     return;
   }
-  const raw = src[f.k];
-  let v = raw == null ? '' : String(raw);
+  let v = str(src[f.k]);
   if (!visible(f, item)) return; // приховане поле не переносимо — застарілі дані не потраплять у звіт
   if (f.none && v.trim() === NONE) { out[f.k] = NONE; return; }
   const kind = kindOf(f);
-  v = kind?.norm && hasText(v) ? kind.norm(v) : f.t === 'area' ? v.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').trim() : v.trim();
+  v = kind?.norm && hasText(v) ? kind.norm(v) : f.t === 'area' ? normArea(v) : v.trim();
   if (v !== '') out[f.k] = v;
 }
 function normItem(fields, src) {
@@ -111,41 +135,39 @@ export function normalizeData(raw) {
 // ---- Перевірка ----
 // problem: { level:'error'|'warn', path, step, section, item (індекс або undefined), label, msg }
 const problem = (level, path, sectionId, item, label, msg) => ({ level, path, step: stepOfSection(sectionId)?.id, section: sectionId, item, label, msg });
+const validISODate = v => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v;
 
 function checkValue(f, item, data, path, sectionId, idx, label, problems) {
+  const push = (p, msg, l = label) => problems.push(problem('error', p, sectionId, idx, l, msg));
   if (f.t === 'group') {
-    const keys = f.items.map(([k]) => `${f.k}_${k}`);
     let any = false;
-    for (const k of keys) {
-      const v = item[k];
-      if (hasText(v)) {
-        if (!KINDS.count.ok(v.trim())) problems.push(problem('error', `${path}${k}`, sectionId, idx, `${label} — ${f.items.find(([kk]) => `${f.k}_${kk}` === k)[2]}`, KINDS.count.msg));
-        else if (+v > 0) any = true;
-      }
+    for (const [k, , short] of f.items) {
+      const v = item[`${f.k}_${k}`];
+      if (!hasText(v)) continue;
+      if (!KINDS.count.ok(v.trim())) push(`${path}${f.k}_${k}`, KINDS.count.msg, `${label} — ${short}`);
+      else if (+v > 0) any = true;
     }
-    if (hasText(item[`${f.k}_other`])) any = true;
-    if (!any && required(f, item, data)) problems.push(problem('error', `${path}${keys[0]}`, sectionId, idx, label, 'Вкажіть кількість хоча б для одного рівня або заповніть «Інше»'));
+    const other = item[`${f.k}_other`];
+    if (hasText(other)) { any = true; if (other.length > OTHER_MAX) push(`${path}${f.k}_other`, `Задовгий текст: ${other.length} символів, максимум ${OTHER_MAX}`, `${label} — інше`); }
+    // помилка групи стоїть на шляху самої групи (points.N.training), а не на першому рівні
+    if (!any && required(f, item, data)) push(`${path}${f.k}`, 'Вкажіть кількість хоча б для одного рівня або заповніть «Інше»');
     return;
   }
   if (!visible(f, item)) return;
-  const v = item[f.k];
-  const text = hasText(v);
+  const v = item[f.k], p = path + f.k;
   if (f.none && v === NONE) return;
-  if (!text) {
-    if (required(f, item, data)) problems.push(problem('error', path + f.k, sectionId, idx, label, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'seg' || f.t === 'sel' ? 'Оберіть відповідь' : 'Обов’язкове поле'));
+  if (!hasText(v)) {
+    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'seg' || f.t === 'sel' ? 'Оберіть відповідь' : 'Обов’язкове поле');
     return;
   }
-  if (v.length > maxLen(f)) problems.push(problem('error', path + f.k, sectionId, idx, label, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`));
-  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) problems.push(problem('error', path + f.k, sectionId, idx, label, 'Недопустиме значення — оберіть зі списку'));
-  if (f.t === 'date') {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(v))) problems.push(problem('error', path + f.k, sectionId, idx, label, 'Дата у форматі РРРР-ММ-ДД'));
-  }
+  if (v.length > maxLen(f)) { push(p, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`); return; }
+  if (f.t === 'area' && v.split('\n').length > MAX_AREA_LINES) { push(p, `Забагато рядків (${v.split('\n').length}), максимум ${MAX_AREA_LINES} — скоротіть текст`); return; }
+  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, 'Недопустиме значення — оберіть зі списку'); return; }
+  if (f.t === 'date' && !validISODate(v)) { push(p, 'Дата у форматі РРРР-ММ-ДД'); return; }
   const kind = kindOf(f);
-  if (kind && !kind.ok(v.trim())) problems.push(problem('error', path + f.k, sectionId, idx, label, kind.msg));
-  else if (kind === KINDS.count && f.min != null && +v < f.min) problems.push(problem('error', path + f.k, sectionId, idx, label, `Не менше ${f.min}`));
+  if (kind && !kind.ok(v.trim())) push(p, kind.msg);
+  else if (kind === KINDS.count && f.min != null && +v < f.min) push(p, `Не менше ${f.min}`);
 }
-
-const itemLabel = (s, i) => `${s.list.item} ${i + 1}`;
 
 export function validateData(d, { today = todayISO() } = {}) {
   const problems = [];
@@ -153,25 +175,24 @@ export function validateData(d, { today = todayISO() } = {}) {
     if (s.fields) for (const f of s.fields) checkValue(f, d, d, '', s.id, undefined, f.l, problems);
     if (s.list) {
       const list = s.list, items = Array.isArray(d[list.key]) ? d[list.key] : [];
-      const on = visible({ showIf: list.showIf }, d);
-      if (!on) continue;
+      if (!visible({ showIf: list.showIf }, d)) continue;
       if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, `Додайте хоча б одну ${list.addText}`));
-      items.forEach((it, i) => {
-        for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.l, problems);
-      });
+      items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.l, problems); });
     }
   }
   crossChecks(d, problems, today);
   return problems;
 }
 
+const NRK_FEATURES = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']];
+
 function crossChecks(d, problems, today) {
   const push = (level, path, sectionId, item, label, msg) => problems.push(problem(level, path, sectionId, item, label, msg));
   // Дата
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d.date || '') && !Number.isNaN(Date.parse(d.date))) {
+  if (validISODate(d.date || '')) {
     const diff = daysBetween(d.date, today);
     if (diff < -1) push('error', 'date', 'general', undefined, 'Дата актуальності даних', 'Дата в майбутньому');
-    else if (diff > 45) push('warn', 'date', 'general', undefined, 'Дата актуальності даних', `Даним уже ${diff} днів — переконайтеся, що вони актуальні, або поставте сьогоднішню дату`);
+    else if (diff > 45) push('warn', 'date', 'general', undefined, 'Дата актуальності даних', `Даним уже ${diff} ${plural(diff, 'день', 'дні', 'днів')} — переконайтеся, що вони актуальні, або поставте сьогоднішню дату`);
   }
   // Однаковий номер у всіх чергових
   const phones = ROLES.map(r => d[`${r.role}_phone`]).filter(v => hasText(v) && v !== NONE);
@@ -192,8 +213,10 @@ function crossChecks(d, problems, today) {
       if (seenCoords.has(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', `Ті самі координати, що й у точки ${seenCoords.get(c) + 1}`); else seenCoords.set(c, i);
       if (!coordsInUkraine(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
     }
-    if (p.nrk === 'Є' && p.nrk_count === '1' && ['nrk_reb', 'nrk_cam', 'nrk_mic'].some(k => p[k] === 'Частково'))
-      push('error', `points.${i}.nrk_count`, 'points', i, 'Кількість НРК', 'За одного НРК відповідь «Частково» неможлива — оберіть «Так» або «Ні»');
+    if (p.nrk === 'Є' && hasText(p.nrk_count) && +p.nrk_count === 1) {
+      const bad = NRK_FEATURES.find(([k]) => p[k] === 'Частково');
+      if (bad) push('error', `points.${i}.${bad[0]}`, 'points', i, `НРК — ${bad[1]}`, 'НРК лише один, тому «Частково» не підходить — оберіть «Так» або «Ні» (або виправте кількість)');
+    }
     if (p.supplied === 'Так' && p.need === 'Є')
       push('warn', `points.${i}.need`, 'points', i, 'Потреба в дозабезпеченні', 'Точка забезпечена повністю, але є потреба в дозабезпеченні — перевірте відповіді');
     if ((p.supplied === 'Ні' || p.supplied === 'Частково') && p.need === 'Немає')
@@ -214,6 +237,9 @@ function crossChecks(d, problems, today) {
 
 export const errorsOf = problems => problems.filter(p => p.level === 'error');
 export const warningsOf = problems => problems.filter(p => p.level === 'warn');
+// Помилки «нових полів» (НРК, гіпотермія, хімзахист) — для звітів старої форми це очікувано
+export const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note'];
+export const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)
 export function progressOf(d) {
@@ -231,6 +257,5 @@ export function progressOf(d) {
   return { total, done };
 }
 
-// Короткі підписи для зведень
 export const POINT_FLAG_KEYS = ['supplied', 'need', 'nrk', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe'];
 export { POINT_FIELDS, POSITION_FIELDS, LEVELS };
