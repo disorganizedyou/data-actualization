@@ -39,7 +39,7 @@ const download = async selector => { const [dl] = await Promise.all([page.waitFo
 
 console.log('▶ анкета: порожня форма');
 await page.goto(FORM);
-await page.waitForSelector('#next');
+await page.waitForSelector('.bar');
 await step(7);
 assert.ok(await page.isDisabled('#report'), 'порожня форма: кнопка звіту має бути неактивна');
 assert.match(await page.textContent('.box.bad h3'), /Потрібно виправити/);
@@ -122,7 +122,7 @@ assert.equal((await readPdfBytes(draft.bytes, { inflate })).kind, 'draft');
 
 console.log('▶ анкета: повторне відкриття звіту');
 await page.goto(FORM);
-await page.waitForSelector('#next');
+await page.waitForSelector('.bar');
 await page.click('#clear');
 await page.setInputFiles('#open', report.path);
 await page.waitForSelector('.box.ok');
@@ -130,6 +130,16 @@ for (const cb of await page.$$('[data-ack]')) { if (!(await cb.isChecked())) awa
 const report2 = await download('#report');
 const payload2 = await readPdfBytes(report2.bytes, { inflate });
 assert.deepEqual(payload2.data, payload.data, 'дані після повторного відкриття ідентичні');
+
+console.log('▶ анкета: відкриття звіту старої форми (v1)');
+await page.goto(FORM);
+await page.waitForSelector('.bar');
+await page.setInputFiles('#open', resolve(ROOT, 'test/fixtures/legacy_v1.pdf'));
+await page.waitForSelector('.box.bad');
+assert.match(await page.textContent('#toast'), /старої версії/);
+const legacyItems = await page.$$eval('.box.bad li', els => els.map(e => e.textContent));
+assert.ok(legacyItems.some(t => /НРК/.test(t)) && legacyItems.some(t => /хімзахист/.test(t)), 'старий звіт вимагає нові поля');
+assert.ok(await page.isDisabled('#report'));
 
 console.log('▶ медслужба: плакати');
 const mpage = await ctx.newPage();

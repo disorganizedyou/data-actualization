@@ -75,3 +75,13 @@ test('pdfEmbedding повертає info-маркер і файл data.json', ()
   assert.equal(e.files['data.json'].type, 'application/json');
   assert.match(e.files['data.json'].src, /^data:application\/json;base64,[A-Za-z0-9+\/=]+$/);
 });
+
+test('справжній PDF старої форми (версія 1) читається', async () => {
+  const { readFileSync } = await import('node:fs');
+  const bytes = new Uint8Array(readFileSync(new URL('./fixtures/legacy_v1.pdf', import.meta.url)));
+  const p = await readPdfBytes(bytes, { inflate });
+  assert.equal(p.legacy, true);
+  assert.equal(p.data.unit, 'МР');
+  assert.equal(p.data.points[0].coords, '37U DQ 12345 67890');
+  assert.equal(p.data.points[0].nrk, undefined);
+});
