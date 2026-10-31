@@ -50,7 +50,7 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
   const nrkCell = p => {
     if (!hasText(p.nrk)) return val('', z(9.5));
     if (p.nrk !== 'Є') return { text: NONE, color: C.grey, fontSize: z(9.5) };
-    const feats = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([kk]) => p[kk] === 'Так' || p[kk] === 'Частково').map(([kk, n]) => p[kk] === 'Частково' ? `${n} (част.)` : n);
+    const feats = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([kk]) => p[kk] === 'Так').map(([, n]) => n);
     return { stack: [{ text: nrkShort(p), bold: true, fontSize: z(9.5) }, ...(feats.length ? [{ text: feats.join(', '), color: C.grey, fontSize: z(8) }] : [])] };
   };
   const PW = [z(18), '*', z(116), z(72), z(72), '*'], PSW = starWidth(PW, PAGE.cw), fitP11 = k.fit(PSW, z(11)), fitP9 = k.fit(PSW, z(9.5));

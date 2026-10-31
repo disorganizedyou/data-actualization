@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-KRAsJZRpEuiYgCtuAPeo/X/QQtcG0zvEjsKmFGrE+gA='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-9W9bF57Id5mPXxz9VhgGuhHTpUIfg6vW+wbQ8ZLK+aw='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -210,7 +210,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-fb2886e";
+const BUILD_VERSION = "v2-a62b7e3";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -349,9 +349,9 @@ const POINT_GROUPS = [
   { id: 'nrk', title: 'НРК — наземний роботизований комплекс', fields: [
     { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true },
     { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
     { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: модель, стан' },
   ] },
   { id: 'hypo', title: 'Засоби проти гіпотермії', fields: [
@@ -630,8 +630,6 @@ function validateData(d, { today = todayISO() } = {}) {
   return problems;
 }
 
-const NRK_FEATURES = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']];
-
 function crossChecks(d, problems, today) {
   const push = (level, path, sectionId, item, label, msg) => problems.push(problem(level, path, sectionId, item, label, msg));
   // Дата
@@ -658,10 +656,6 @@ function crossChecks(d, problems, today) {
     if (c && isCoords(c)) {
       if (seenCoords.has(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', `Ті самі координати, що й у точки ${seenCoords.get(c) + 1}`); else seenCoords.set(c, i);
       if (!coordsInUkraine(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
-    }
-    if (p.nrk === 'Є' && hasText(p.nrk_count) && +p.nrk_count === 1) {
-      const bad = NRK_FEATURES.find(([k]) => p[k] === 'Частково');
-      if (bad) push('error', `points.${i}.${bad[0]}`, 'points', i, `НРК — ${bad[1]}`, 'НРК лише один, тому «Частково» не підходить — оберіть «Так» або «Ні» (або виправте кількість)');
     }
   });
   // Позиції
@@ -764,10 +758,18 @@ function parsePayload(text) {
 //            «Інтернет» («Є, стабільний»); «Потреба в скидах установленого зразка» — Так/Ні;
 //            нове питання «чи здійснюють скиди інші» (виводиться з алгоритму, якщо його було описано).
 //   Ключі v1 і v2 збігаються, тож перетворення v2 → v3 застосовується до обох.
+//   Для всіх версій: обладнання НРК (РЕБ/камера/мікрофон) — лише Так/Ні; давнє «Частково»
+//   не вгадуємо, а очищаємо — форма попросить відповісти заново.
 const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
 const NET_V3 = { 'Є, стабільна': 'Є, стабільний', 'Є, нестабільна': 'Є, нестабільний' };
 const YN_V3 = { 'Є': 'Так', 'Немає': 'Ні' };
 const txt = v => typeof v === 'string' ? v.trim() : '';
+const NRK_YN = ['nrk_reb', 'nrk_cam', 'nrk_mic'];
+const dropPartialNrk = src => !Array.isArray(src.points) ? src : { ...src, points: src.points.map(p => {
+  if (!p || typeof p !== 'object' || Array.isArray(p) || !NRK_YN.some(k => p[k] === 'Частково')) return p;
+  const q = { ...p }; for (const k of NRK_YN) if (q[k] === 'Частково') delete q[k];
+  return q;
+}) };
 
 function upgradeToV3(src) {
   const d = { ...src };
@@ -790,7 +792,7 @@ function upgradeToV3(src) {
 
 function migrate(data, fromVersion) {
   const src = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-  const d = normalizeData(fromVersion < 3 ? upgradeToV3(src) : src);
+  const d = normalizeData(dropPartialNrk(fromVersion < 3 ? upgradeToV3(src) : src));
   if (fromVersion < SCHEMA_VERSION) d.migratedFrom = fromVersion;
   return d;
 }

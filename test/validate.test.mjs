@@ -89,15 +89,17 @@ test('умовна обов’язковість: примітки з’явля
   assert.ok(errs(d).some(x => x.path === 'mp_help_note'));
 });
 
-test('НРК: за «Є» обов’язкові кількість і три ознаки; за одного НРК «Частково» неможливе', () => {
+test('НРК: за «Є» обов’язкові кількість і три ознаки (лише Так/Ні)', () => {
   const d = clone();
   d.points[1].nrk = 'Є';
   const e = errs(d).map(x => x.path);
   for (const k of ['nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic']) assert.ok(e.includes(`points.1.${k}`), k);
-  d.points[0].nrk_count = '1';
-  assert.ok(errs(d).some(x => x.path === 'points.0.nrk_reb' && /Частково/.test(x.msg)), 'помилка стоїть на ознаці з «Частково»');
+  d.points[0].nrk_reb = 'Частково';
+  assert.ok(errs(d).some(x => x.path === 'points.0.nrk_reb' && /Недопустиме/.test(x.msg)), '«Частково» більше не варіант');
+  const m = migrate({ ...FULL, points: [{ ...FULL.points[0], nrk_reb: 'Частково', nrk_mic: 'Частково' }] }, 3).points[0];
+  assert.equal(m.nrk_reb, undefined); assert.equal(m.nrk_mic, undefined); assert.equal(m.nrk_cam, 'Так');
+  d.points[0].nrk_reb = 'Так';
   d.points[0].nrk_count = '01';
-  assert.ok(errs(d).some(x => x.path === 'points.0.nrk_reb'), 'початковий нуль не обходить звірку');
   assert.equal(normalizeData(d).points[0].nrk_count, '1');
   d.points[0].nrk_count = '0';
   assert.ok(errs(d).some(x => x.path === 'points.0.nrk_count' && /менше/.test(x.msg)));

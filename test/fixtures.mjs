@@ -7,7 +7,7 @@ export const FULL = {
   points: [
     { name: 'Сосна', coords: '37U DQ 12345 67890', contact: 'позивний Сосна, 149.500', net: 'Є, нестабільний', net_note: 'мобільний інтернет',
       supplied: 'Часткова', supplied_note: 'турнікети — 10 шт., оклюзійні наліпки — 6 шт.',
-      nrk: 'Є', nrk_count: '2', nrk_reb: 'Частково', nrk_cam: 'Так', nrk_mic: 'Ні', nrk_note: 'Термінатор',
+      nrk: 'Є', nrk_count: '2', nrk_reb: 'Так', nrk_cam: 'Так', nrk_mic: 'Ні', nrk_note: 'Термінатор',
       hypo_heat: 'Є', hypo_bag: 'Немає', hypo_ready: 'Є', hypo_note: 'грілки — 20 шт.',
       ppe: 'Частково', ppe_note: 'протигази — 4 шт., костюми — немає',
       training_asm: '6', training_cls: '2', training_other: '1 водій пройшов курс зупинки кровотечі' },

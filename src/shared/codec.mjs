@@ -60,10 +60,18 @@ export function parsePayload(text) {
 //            «Інтернет» («Є, стабільний»); «Потреба в скидах установленого зразка» — Так/Ні;
 //            нове питання «чи здійснюють скиди інші» (виводиться з алгоритму, якщо його було описано).
 //   Ключі v1 і v2 збігаються, тож перетворення v2 → v3 застосовується до обох.
+//   Для всіх версій: обладнання НРК (РЕБ/камера/мікрофон) — лише Так/Ні; давнє «Частково»
+//   не вгадуємо, а очищаємо — форма попросить відповісти заново.
 const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
 const NET_V3 = { 'Є, стабільна': 'Є, стабільний', 'Є, нестабільна': 'Є, нестабільний' };
 const YN_V3 = { 'Є': 'Так', 'Немає': 'Ні' };
 const txt = v => typeof v === 'string' ? v.trim() : '';
+const NRK_YN = ['nrk_reb', 'nrk_cam', 'nrk_mic'];
+const dropPartialNrk = src => !Array.isArray(src.points) ? src : { ...src, points: src.points.map(p => {
+  if (!p || typeof p !== 'object' || Array.isArray(p) || !NRK_YN.some(k => p[k] === 'Частково')) return p;
+  const q = { ...p }; for (const k of NRK_YN) if (q[k] === 'Частково') delete q[k];
+  return q;
+}) };
 
 function upgradeToV3(src) {
   const d = { ...src };
@@ -86,7 +94,7 @@ function upgradeToV3(src) {
 
 export function migrate(data, fromVersion) {
   const src = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-  const d = normalizeData(fromVersion < 3 ? upgradeToV3(src) : src);
+  const d = normalizeData(dropPartialNrk(fromVersion < 3 ? upgradeToV3(src) : src));
   if (fromVersion < SCHEMA_VERSION) d.migratedFrom = fromVersion;
   return d;
 }

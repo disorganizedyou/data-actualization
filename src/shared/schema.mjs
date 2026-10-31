@@ -83,9 +83,9 @@ export const POINT_GROUPS = [
   { id: 'nrk', title: 'НРК — наземний роботизований комплекс', fields: [
     { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true },
     { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
     { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: модель, стан' },
   ] },
   { id: 'hypo', title: 'Засоби проти гіпотермії', fields: [

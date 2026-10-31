@@ -184,8 +184,6 @@ export function validateData(d, { today = todayISO() } = {}) {
   return problems;
 }
 
-const NRK_FEATURES = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']];
-
 function crossChecks(d, problems, today) {
   const push = (level, path, sectionId, item, label, msg) => problems.push(problem(level, path, sectionId, item, label, msg));
   // Дата
@@ -212,10 +210,6 @@ function crossChecks(d, problems, today) {
     if (c && isCoords(c)) {
       if (seenCoords.has(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', `Ті самі координати, що й у точки ${seenCoords.get(c) + 1}`); else seenCoords.set(c, i);
       if (!coordsInUkraine(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
-    }
-    if (p.nrk === 'Є' && hasText(p.nrk_count) && +p.nrk_count === 1) {
-      const bad = NRK_FEATURES.find(([k]) => p[k] === 'Частково');
-      if (bad) push('error', `points.${i}.${bad[0]}`, 'points', i, `НРК — ${bad[1]}`, 'НРК лише один, тому «Частково» не підходить — оберіть «Так» або «Ні» (або виправте кількість)');
     }
   });
   // Позиції
