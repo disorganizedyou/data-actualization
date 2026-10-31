@@ -2,7 +2,7 @@
 // Чиста логіка без DOM — використовується формою, інструментом медслужби й тестами.
 
 import { SECTIONS, LEVELS, ROLES, CONTACT, NONE, SCHEMA_VERSION, POINT_FIELDS, POSITION_FIELDS,
-  groupKeys, visible, required, stepOfSection, listDef } from './schema.mjs';
+  groupKeys, visible, required, stepOfSection, listDef, dropsDone } from './schema.mjs';
 import { hasText, daysBetween, todayISO, plural } from './text.mjs';
 
 export const MAX_IMPORT_STRING = 2000;   // жорсткий ліміт довжини рядка при імпорті з файла/чернетки
@@ -78,7 +78,7 @@ export const KINDS = {
     msg: 'Ціле число хвилин від 1 до 1440, наприклад 15' },
   count: { ph: '0', inputmode: 'numeric', max: 3, norm: intNorm, ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
   unit: { norm: v => squash(v).toUpperCase(), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} .\-\/]{0,11}$/u.test(v) && /[\p{L}\p{N}]/u.test(v),
-    msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс' },
+    msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс, скісна риска' },
   callsign: { norm: v => squash(v.replace(APOS, '’')), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} ’.\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
     msg: 'Позивний: літери, цифри, пробіл, дефіс, апостроф (без телефонів і посилань)' },
   name: { norm: v => squash(v.replace(APOS, '’')), ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
@@ -150,7 +150,7 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
     const other = item[`${f.k}_other`];
     if (hasText(other)) { any = true; if (other.length > OTHER_MAX) push(`${path}${f.k}_other`, `Задовгий текст: ${other.length} символів, максимум ${OTHER_MAX}`, `${label} — інше`); }
     // помилка групи стоїть на шляху самої групи (points.N.training), а не на першому рівні
-    if (!any && required(f, item, data)) push(`${path}${f.k}`, 'Вкажіть кількість хоча б для одного рівня або заповніть «Інше»');
+    if (!any && required(f, item, data)) push(`${path}${f.k}`, 'Вкажіть кількість хоча б для одного рівня або заповніть поле «Інше або уточнення»');
     return;
   }
   if (!visible(f, item)) return;
@@ -163,7 +163,7 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
   if (v.length > maxLen(f)) { push(p, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`); return; }
   if (f.t === 'area' && v.split('\n').length > MAX_AREA_LINES) { push(p, `Забагато рядків (${v.split('\n').length}), максимум ${MAX_AREA_LINES} — скоротіть текст`); return; }
   if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, 'Недопустиме значення — оберіть зі списку'); return; }
-  if (f.t === 'date' && !validISODate(v)) { push(p, 'Дата у форматі РРРР-ММ-ДД'); return; }
+  if (f.t === 'date' && !validISODate(v)) { push(p, 'Некоректна дата'); return; }
   const kind = kindOf(f);
   if (kind && !kind.ok(v.trim())) push(p, kind.msg);
   else if (kind === KINDS.count && f.min != null && +v < f.min) push(p, `Не менше ${f.min}`);
@@ -217,10 +217,6 @@ function crossChecks(d, problems, today) {
       const bad = NRK_FEATURES.find(([k]) => p[k] === 'Частково');
       if (bad) push('error', `points.${i}.${bad[0]}`, 'points', i, `НРК — ${bad[1]}`, 'НРК лише один, тому «Частково» не підходить — оберіть «Так» або «Ні» (або виправте кількість)');
     }
-    if (p.supplied === 'Так' && p.need === 'Є')
-      push('warn', `points.${i}.need`, 'points', i, 'Потреба в дозабезпеченні', 'Точка забезпечена повністю, але є потреба в дозабезпеченні — перевірте відповіді');
-    if ((p.supplied === 'Ні' || p.supplied === 'Частково') && p.need === 'Немає')
-      push('warn', `points.${i}.need`, 'points', i, 'Потреба в дозабезпеченні', 'Майна бракує, але потреби в дозабезпеченні немає — перевірте відповіді');
   });
   // Позиції
   const pos = Array.isArray(d.positions) && d.drops === 'Так' ? d.positions : [];
@@ -231,15 +227,16 @@ function crossChecks(d, problems, today) {
     if (hasText(p.coords) && isCoords(p.coords) && !coordsInUkraine(p.coords))
       push('warn', `positions.${i}.coords`, 'drops', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
   });
-  if (d.drops === 'Так' && hasText(d.algo_time) && KINDS.min.ok(d.algo_time) && +d.algo_time > 240)
+  if (dropsDone(d) && hasText(d.algo_time) && KINDS.min.ok(d.algo_time) && +d.algo_time > 240)
     push('warn', 'algo_time', 'algo', undefined, 'Орієнтовний час від запиту до скиду', 'Понад 4 години від запиту до скиду — перевірте, чи число в хвилинах');
 }
 
 export const errorsOf = problems => problems.filter(p => p.level === 'error');
 export const warningsOf = problems => problems.filter(p => p.level === 'warn');
-// Помилки «нових полів» (НРК, гіпотермія, хімзахист) — для звітів старої форми це очікувано
-export const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note'];
-export const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path.endsWith('.' + k));
+// Помилки «нових полів» — для звітів попередніх версій форми це очікувано:
+// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи
+export const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other'];
+export const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)
 export function progressOf(d) {
@@ -257,5 +254,5 @@ export function progressOf(d) {
   return { total, done };
 }
 
-export const POINT_FLAG_KEYS = ['supplied', 'need', 'nrk', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe'];
+export const POINT_FLAG_KEYS = ['supplied', 'nrk', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe'];
 export { POINT_FIELDS, POSITION_FIELDS, LEVELS };

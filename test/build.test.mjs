@@ -56,6 +56,6 @@ test('docDefinition звіту й плаката будуються без ви�
 test('collectNeeds збирає потреби й зауваги', () => {
   const n = collectNeeds(normalizeData(FULL));
   const txt = n.map(x => x.what).join('\n');
-  assert.match(txt, /Дозабезпечення: турнікети/); assert.match(txt, /спальників/); assert.match(txt, /Хімзахист частково/); assert.match(txt, /НРК немає/); assert.match(txt, /Потрібна допомога/);
+  assert.match(txt, /Бракує медмайна: турнікети/); assert.match(txt, /спальників/); assert.match(txt, /Хімзахист — частково/); assert.match(txt, /НРК немає/); assert.match(txt, /Потрібна допомога/);
   assert.ok(!/бракує — бракує/.test(txt));
 });

@@ -32,13 +32,12 @@ export const L = f => f.pl || f.l;
 export const T = s => s.pt || s.title;
 
 // Чи значення «негативне» для підсвічування у зведеннях
-export const NEGATIVE = new Set(['Ні', 'Немає', 'Частково', 'Є, нестабільна']);
+export const NEGATIVE = new Set(['Ні', 'Немає', 'Частково', 'Часткова', 'Є, нестабільний']);
 // Відсутність НРК чи інтернету — не дефект забезпечення, а особливість точки (жовтий, не червоний)
 const SOFT_KEYS = new Set(['nrk', 'net']);
 export const flagColor = (key, v) => {
   if (!hasText(v)) return C.rule;
-  if (key === 'need') return v === 'Є' ? C.bad : C.ok;             // потреба «Є» — погано
-  if (v === 'Частково' || v === 'Є, нестабільна') return C.warn;
+  if (v === 'Частково' || v === 'Часткова' || v === 'Є, нестабільний') return C.warn;
   if (NEGATIVE.has(v)) return SOFT_KEYS.has(key) ? C.warn : C.bad;
   return C.ok;
 };

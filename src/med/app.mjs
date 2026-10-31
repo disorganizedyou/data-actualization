@@ -23,8 +23,8 @@ const byUnit = (a, b) => (a.data.unit || '').localeCompare(b.data.unit || '', 'u
 const sorted = () => [...reports].sort(byUnit);
 const kindName = (r, acc = false) => r.kind === 'draft' ? (acc ? 'чернетку' : 'чернетка') : (acc ? 'звіт' : 'звіт');
 
-// Помилки, що не зводяться до «нові поля ще не заповнені» (для звітів старої форми)
-const realErrors = r => r.legacy ? r.errors.filter(e => !isNewFieldError(e)) : r.errors;
+// Помилки, що не зводяться до «нові поля ще не заповнені» (для звітів попередніх версій форми)
+const realErrors = r => r.migrated ? r.errors.filter(e => !isNewFieldError(e)) : r.errors;
 const isClean = r => r.kind === 'report' && !r.errors.length;
 
 function render() {
@@ -69,7 +69,9 @@ function stateBadges(r) {
   const out = [];
   if (r.kind === 'draft') out.push('<span class="badge warn">чернетка</span>');
   const real = realErrors(r), fresh = r.errors.length - real.length;
-  if (r.legacy) out.push(`<span class="badge grey" title="Файл старої версії форми">стара форма${fresh ? ` · ${fresh} нових ${plural(fresh, 'поле', 'поля', 'полів')} не заповнено` : ''}</span>`);
+  const freshNote = fresh ? ` · ${fresh} нових ${plural(fresh, 'поле', 'поля', 'полів')} не заповнено` : '';
+  if (r.legacy) out.push(`<span class="badge grey" title="Файл старої версії форми">стара форма${freshNote}</span>`);
+  else if (r.migrated && fresh) out.push(`<span class="badge grey" title="Файл попередньої версії форми">попередня версія форми${freshNote}</span>`);
   if (real.length) out.push(`<span class="badge bad">${real.length} ${plural(real.length, 'помилка', 'помилки', 'помилок')}</span>`);
   if (!r.errors.length && r.kind === 'report') out.push('<span class="badge ok">✓ повний</span>');
   if (r.warnings.length) out.push(`<span class="badge grey">${r.warnings.length} зауваж.</span>`);
@@ -123,7 +125,7 @@ async function addFiles(files) {
       const p = await readPdfBytes(new Uint8Array(await f.arrayBuffer()));
       const data = normalizeData(p.data);
       const problems = validateData(data);
-      const r = { id: ++seq, file: f.name, data, kind: p.kind, legacy: !!(p.legacy || p.data.migratedFrom), created: p.created, v: p.v,
+      const r = { id: ++seq, file: f.name, data, kind: p.kind, legacy: !!(p.legacy || p.data.migratedFrom === 1), migrated: !!(p.legacy || p.data.migratedFrom), created: p.created, v: p.v,
         errors: errorsOf(problems), warnings: warningsOf(problems), needs: collectNeeds(data), open: false, fit: null };
       const same = reports.find(x => hasText(x.data.unit) && hasText(data.unit) && x.data.unit.toUpperCase() === data.unit.toUpperCase());
       if (same) {

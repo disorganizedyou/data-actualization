@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-FPB3H1J+HVcU1nOvl0hVY+oNiFk6dftykiaU23vpAQ8='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-KRAsJZRpEuiYgCtuAPeo/X/QQtcG0zvEjsKmFGrE+gA='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -210,7 +210,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-2d7b23b";
+const BUILD_VERSION = "v2-fb2886e";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -274,12 +274,13 @@ const iconSvg = (name, color = 'currentColor') =>
 //   v        «вид» значення для нормалізації/перевірки (див. validate.mjs KINDS)
 //   o        варіанти для sel/seg
 //   req      обов’язкове: true | (item, data) => boolean
-//   showIf   [ключ, [значення…]] — показувати лише коли інше поле має одне зі значень
+//   showIf   [ключ, [значення…]] — показувати лише коли інше поле має одне зі значень;
+//            або функція (item) => boolean для складніших умов
 //   max      максимальна довжина
 //   ph       плейсхолдер
 //   hint     підказка під полем
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const NONE = 'Немає';
 const TITLE = 'Актуалізація даних для медичної служби';
 const FORM_NAME = 'Анкета актуалізації даних';
@@ -289,16 +290,17 @@ const OPT = {
   ypn: ['Так', 'Частково', 'Ні'],
   have: ['Є', 'Немає'],
   havePart: ['Є', 'Частково', 'Немає'],
-  net: ['Є, стабільна', 'Є, нестабільна', 'Немає'],
+  supply: ['Повна', 'Часткова', 'Немає'],
+  net: ['Є, стабільний', 'Є, нестабільний', 'Немає'],
 };
 
 // Рівні підготовки: [ключ, повна назва, коротка назва]
 const LEVELS = [
-  ['asm', 'Базова домедична допомога (TCCC ASM)', 'Базова (ASM)'],
-  ['cls', 'CLS (Combat Lifesaver)', 'CLS'],
-  ['cmc', 'CMC (Combat Medic / Corpsman)', 'CMC'],
-  ['cpp', 'CPP (Combat Paramedic / Provider)', 'CPP'],
-  ['med', 'Медична освіта (фельдшер, медсестра, лікар)', 'Медосвіта'],
+  ['asm', 'ASM — базовий курс TCCC', 'Базова (ASM)'],
+  ['cls', 'CLS — Combat Lifesaver', 'CLS'],
+  ['cmc', 'CMC — Combat Medic / Corpsman', 'CMC'],
+  ['cpp', 'CPP — Combat Paramedic / Provider', 'CPP'],
+  ['med', 'Медична освіта (фельдшер, медсестра / медбрат, лікар)', 'Медосвіта'],
 ];
 
 // Контакти чергового (поля однакові для всіх трьох ролей; у даних ключ = роль + '_' + k)
@@ -314,56 +316,58 @@ const ROLES = [
   { role: 'kb', title: 'Черговий капітан бою', short: 'Черговий КБ', sub: 'підрозділу', badge: 'КБ', color: '#1f4fa3' },
   { role: 's4', title: 'Черговий S4', short: 'Черговий S4', sub: 'підрозділу', badge: 'S4', color: '#b26b00' },
   { role: 'mp', title: 'Черговий медичного пункту', short: 'Черговий медпункту', sub: 'підрозділу · цілодобово',
-    note: 'Обов’язково чергує цілодобово', badge: 'cross', color: '#e30613' },
+    note: 'Черговий медпункту має бути на зв’язку цілодобово', badge: 'cross', color: '#e30613' },
 ];
 
-const CONTACTS_NOTE = 'Вказуйте контакти саме чергових акаунтів — службових номерів і месенджерів, якими користується черговий зміни. '
-  + 'Не вказуйте особисті контакти окремих військовослужбовців.';
+const CONTACTS_NOTE = 'Вказуйте лише службові контакти чергової зміни: номери й акаунти, якими користується будь-хто на черговій зміні. '
+  + 'Особисті контакти не вказуйте.';
 
 const is = (key, ...values) => it => values.includes(it?.[key]);
+// Скиди для підрозділу відбуваються: з власних позицій або силами інших підрозділів
+const dropsDone = d => d?.drops === 'Так' || (d?.drops === 'Ні' && d?.drops_other === 'Так');
+// Обидві відповіді «Ні» — скидів для підрозділу немає взагалі
+const noDrops = d => d?.drops === 'Ні' && d?.drops_other === 'Ні';
 
 // ---- Точка передачі поранених: поля згруповані для зручності заповнення ----
 const POINT_GROUPS = [
   { id: 'loc', title: 'Розташування', fields: [
     { k: 'name', l: 'Назва або орієнтир точки', pl: 'Назва / орієнтир', v: 'name', max: 60, req: true, ph: 'наприклад: «Сосна», підвал біля школи' },
-    { k: 'coords', l: 'Приблизні координати (MGRS)', pl: 'Координати', v: 'coords', req: true },
+    { k: 'coords', l: 'Координати точки (MGRS)', pl: 'Координати', v: 'coords', req: true },
   ] },
   { id: 'link', title: 'Зв’язок', fields: [
-    { k: 'contact', l: 'Контакт для зв’язку з точкою', pl: 'Зв’язок з точкою', t: 'area', max: 300, req: true,
+    { k: 'contact', l: 'Як зв’язатися з точкою', pl: 'Зв’язок з точкою', t: 'area', max: 300, req: true,
       ph: 'позивний, телефон або месенджер, частота' },
     { k: 'net', l: 'Інтернет на точці', pl: 'Інтернет', t: 'seg', o: OPT.net, req: true },
-    { k: 'net_note', l: 'Яке саме підключення', pl: 'Тип підключення', max: 100, req: true,
-      showIf: ['net', ['Є, стабільна', 'Є, нестабільна']], ph: 'мобільний інтернет, Starlink…' },
+    { k: 'net_note', l: 'Тип підключення', pl: 'Тип підключення', max: 100, req: true,
+      showIf: ['net', ['Є, стабільний', 'Є, нестабільний']], ph: 'мобільний інтернет, Starlink…' },
   ] },
   { id: 'supply', title: 'Медичне майно', fields: [
-    { k: 'supplied', l: 'Чи забезпечена точка медичним майном у належній кількості', pl: 'Забезпечення майном', t: 'seg', o: OPT.ypn, req: true },
-    { k: 'supplied_note', l: 'Чого бракує', pl: 'Чого бракує', t: 'area', max: 300, req: true, showIf: ['supplied', ['Частково', 'Ні']] },
-    { k: 'need', l: 'Потреба в дозабезпеченні медичним майном', pl: 'Потреба в дозабезпеченні', t: 'seg', o: OPT.have, req: true },
-    { k: 'need_note', l: 'Що саме та в якій кількості', pl: 'Що саме, скільки', t: 'area', max: 400, req: true,
-      showIf: ['need', ['Є']], ph: 'наприклад: турнікети — 10 шт.' },
+    { k: 'supplied', l: 'Забезпеченість медичним майном', pl: 'Забезпеченість майном', t: 'seg', o: OPT.supply, req: true },
+    { k: 'supplied_note', l: 'Чого бракує і скільки потрібно', pl: 'Чого бракує, скільки', t: 'area', max: 400, req: true,
+      showIf: ['supplied', ['Часткова', 'Немає']], ph: 'наприклад: турнікети — 10 шт.' },
   ] },
   { id: 'nrk', title: 'НРК — наземний роботизований комплекс', fields: [
     { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true },
     { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_reb', l: 'Обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_cam', l: 'Обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_mic', l: 'Обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'необов’язково' },
+    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.ypn, req: true, showIf: ['nrk', ['Є']] },
+    { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: модель, стан' },
   ] },
   { id: 'hypo', title: 'Засоби проти гіпотермії', fields: [
     { k: 'hypo_heat', l: 'Хімічні грілки', pl: 'Хімічні грілки', t: 'seg', o: OPT.have, req: true },
     { k: 'hypo_bag', l: 'Спальники', pl: 'Спальники', t: 'seg', o: OPT.have, req: true },
-    { k: 'hypo_ready', l: 'Ready-Heat', pl: 'Ready-Heat', t: 'seg', o: OPT.have, req: true },
-    { k: 'hypo_note', l: 'Кількість, уточнення', pl: 'Уточнення', max: 200, ph: 'необов’язково, наприклад: грілки — 20 шт.' },
+    { k: 'hypo_ready', l: 'Ковдри, що самонагріваються (Ready-Heat)', pl: 'Ready-Heat', t: 'seg', o: OPT.have, req: true },
+    { k: 'hypo_note', l: 'Кількість, уточнення', pl: 'Уточнення', max: 200, ph: 'наприклад: грілки — 20 шт.' },
   ] },
-  { id: 'ppe', title: 'Засоби індивідуального захисту (хімзахист)', fields: [
-    { k: 'ppe', l: 'Чи є на точці засоби хімзахисту', pl: 'Хімзахист', t: 'seg', o: OPT.havePart, req: true },
+  { id: 'ppe', title: 'Засоби хімзахисту', fields: [
+    { k: 'ppe', l: 'Засоби хімзахисту на точці', pl: 'Хімзахист', t: 'seg', o: OPT.havePart, req: true },
     { k: 'ppe_note', l: 'Що саме є та чого бракує', pl: 'Уточнення', max: 300, req: is('ppe', 'Частково'),
       showIf: ['ppe', ['Є', 'Частково']], ph: 'наприклад: протигази — 4 шт., костюми — немає' },
   ] },
   { id: 'training', title: 'Підготовка персоналу', fields: [
-    { k: 'training', l: 'Рівень підготовки осіб, які надаватимуть допомогу', pl: 'Підготовка персоналу', t: 'group', items: LEVELS, req: true,
-      tip: 'Вкажіть кількість осіб для кожного рівня. Якщо таких немає — залиште поле порожнім. Потрібен хоча б один рівень або уточнення.' },
+    { k: 'training', l: 'Скільки осіб на точці мають медичну підготовку', pl: 'Підготовка персоналу', t: 'group', items: LEVELS, req: true,
+      tip: 'Кожну особу рахуйте один раз — за найвищим рівнем. Порожнє поле означає «0». Заповніть хоча б один рівень або поле «Інше або уточнення».' },
   ] },
 ];
 const POINT_FIELDS = POINT_GROUPS.flatMap(g => g.fields);
@@ -371,7 +375,7 @@ const POINT_FIELDS = POINT_GROUPS.flatMap(g => g.fields);
 const POSITION_FIELDS = [
   { k: 'name', l: 'Назва або позивний позиції', pl: 'Назва / позивний', v: 'name', max: 60, req: true },
   { k: 'coords', l: 'Приблизні координати позиції (MGRS)', pl: 'Координати', v: 'coords', req: true },
-  { k: 'weight', l: 'Вага, яку можуть скидати, кг', pl: 'Вага скиду, кг', v: 'kg', req: true },
+  { k: 'weight', l: 'Максимальна вага скиду, кг', pl: 'Вага скиду, кг', v: 'kg', req: true },
   { k: 'flight', l: 'Час підльоту до позиції переднього краю, хв', pl: 'Час підльоту, хв', v: 'min', req: true },
 ];
 
@@ -384,30 +388,33 @@ const roleSection = r => ({
 const SECTIONS = [
   { id: 'general', title: 'Загальні дані', fields: [
     { k: 'unit', l: 'Підрозділ — коротка назва', pl: 'Підрозділ', v: 'unit', max: 12, req: true, ph: 'МР, 2МБ, 1 РОТА…',
-      hint: 'Так, як підрозділ називають у документах. Назва автоматично запишеться великими літерами.' },
+      hint: 'Як у документах. Великі літери з’являться автоматично.' },
     { k: 'date', l: 'Дата актуальності даних', pl: 'Дата', t: 'date', req: true },
-    { k: 'author', l: 'Позивний того, хто заповнив', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
+    { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
   ...ROLES.map(roleSection),
   { id: 'points', title: 'Точки передачі поранених', pt: 'Точки передачі поранених',
     list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, groups: POINT_GROUPS, fields: POINT_FIELDS } },
-  { id: 'drops', title: 'Позиції, які можуть здійснювати медичні скиди', pt: 'Позиції для медичних скидів',
-    fields: [{ k: 'drops', l: 'Чи є в підрозділі позиції, які можуть здійснювати медичні скиди', pl: 'Чи є такі позиції', t: 'seg', o: OPT.yn, req: true }],
-    list: { key: 'positions', item: 'Позиція', addText: 'позицію', min: 1, showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
-  { id: 'algo', title: 'Алгоритм передачі медичних скидів', pt: 'Алгоритм медичних скидів',
-    hint: 'Якщо позицій для скидів немає, але скиди для вашого підрозділу здійснюють інші — опишіть, як це відбувається.',
+  { id: 'drops', title: 'Позиції, з яких можуть здійснювати медичні скиди', pt: 'Позиції для медичних скидів',
     fields: [
-      { k: 'algo_carry', l: 'Хто везе й куди', pl: 'Хто везе й куди', t: 'area', max: 500, req: is('drops', 'Так') },
-      { k: 'algo_hand', l: 'Хто передає (хто здійснює скид)', pl: 'Хто передає / скидає', t: 'area', max: 500, req: is('drops', 'Так') },
-      { k: 'algo_time', l: 'Орієнтовний час від запиту до скиду, хв', pl: 'Від запиту до скиду, хв', v: 'min', req: is('drops', 'Так') },
-      { k: 'algo_note', l: 'Додатково (за потреби)', pl: 'Додатково', t: 'area', max: 500 },
+      { k: 'drops', l: 'Чи є в підрозділі позиції, з яких можна здійснювати медичні скиди', pl: 'Чи є такі позиції', t: 'seg', o: OPT.yn, req: true },
+      { k: 'drops_other', l: 'Чи здійснюють медичні скиди для вашого підрозділу інші підрозділи', pl: 'Скиди здійснюють інші', t: 'seg', o: OPT.yn, req: true,
+        showIf: ['drops', ['Ні']] },
+    ],
+    list: { key: 'positions', item: 'Позиція', addText: 'позицію', min: 1, showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
+  { id: 'algo', title: 'Як відбувається медичний скид', pt: 'Як відбувається медичний скид', showIf: dropsDone,
+    fields: [
+      { k: 'algo_carry', l: 'Хто доставляє вантаж до місця скиду і куди саме', pl: 'Хто доставляє й куди', t: 'area', max: 500, req: true, showIf: dropsDone },
+      { k: 'algo_hand', l: 'Хто здійснює скид', pl: 'Хто здійснює скид', t: 'area', max: 500, req: true, showIf: dropsDone },
+      { k: 'algo_time', l: 'Орієнтовний час від запиту до скиду, хв', pl: 'Від запиту до скиду, хв', v: 'min', req: true, showIf: dropsDone },
+      { k: 'algo_note', l: 'Додатково', pl: 'Додатково', t: 'area', max: 500, showIf: dropsDone },
     ] },
-  { id: 'mphelp', title: 'Можливості медичних пунктів щодо формування скидів', pt: 'Формування скидів медпунктами', fields: [
+  { id: 'mphelp', title: 'Формування скидів медпунктом', pt: 'Формування скидів медпунктом', fields: [
     { k: 'mp_help', l: 'Чи потрібна медпункту допомога у формуванні скидів', pl: 'Потрібна допомога', t: 'seg', o: OPT.yn, req: true },
     { k: 'mp_help_note', l: 'Яка саме допомога потрібна', pl: 'Яка саме', t: 'area', max: 400, req: true, showIf: ['mp_help', ['Так']] },
-    { k: 'mp_std', l: 'Потреба в медичних скидах установленого зразка (наприклад, для пролонгованого догляду)', pl: 'Скиди встановленого зразка',
-      t: 'seg', o: OPT.have, req: true },
-    { k: 'mp_std_qty', l: 'Які саме та скільки', pl: 'Які саме, скільки', t: 'area', max: 400, req: true, showIf: ['mp_std', ['Є']],
+    { k: 'mp_std', l: 'Чи потрібні медпункту скиди встановленого зразка (наприклад, для пролонгованого догляду)', pl: 'Скиди встановленого зразка',
+      t: 'seg', o: OPT.yn, req: true },
+    { k: 'mp_std_qty', l: 'Які саме та скільки', pl: 'Які саме, скільки', t: 'area', max: 400, req: true, showIf: ['mp_std', ['Так']],
       ph: 'наприклад: пролонгований догляд — 5 шт.' },
   ] },
 ];
@@ -422,7 +429,7 @@ const STEPS = [
   { id: 'mp', title: 'Черговий медичного пункту', short: 'Медпункт', sections: ['mp'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
   { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo'] },
-  { id: 'mphelp', title: 'Можливості медпунктів', short: 'Медпункти', sections: ['mphelp'] },
+  { id: 'mphelp', title: 'Медпункт і скиди', short: 'Скиди МП', sections: ['mphelp'] },
   { id: 'check', title: 'Перевірка та звіт', short: 'Звіт', sections: [], final: true },
 ];
 const stepOfSection = id => STEPS.find(s => s.sections.includes(id));
@@ -431,7 +438,8 @@ const stepOfSection = id => STEPS.find(s => s.sections.includes(id));
 const groupKeys = f => [...f.items.map(([k]) => `${f.k}_${k}`), `${f.k}_other`];
 
 // Чи поле видиме за поточних значень (item — об’єкт, у якому живе поле)
-const visible = (f, item) => !f.showIf || f.showIf[1].includes(item?.[f.showIf[0]]);
+const visible = (f, item) => !f.showIf
+  || (typeof f.showIf === 'function' ? !!f.showIf(item) : f.showIf[1].includes(item?.[f.showIf[0]]));
 const required = (f, item, data) => visible(f, item) && (typeof f.req === 'function' ? !!f.req(item, data) : !!f.req);
 
 // Порожній документ
@@ -516,7 +524,7 @@ const KINDS = {
     msg: 'Ціле число хвилин від 1 до 1440, наприклад 15' },
   count: { ph: '0', inputmode: 'numeric', max: 3, norm: intNorm, ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
   unit: { norm: v => squash(v).toUpperCase(), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} .\-\/]{0,11}$/u.test(v) && /[\p{L}\p{N}]/u.test(v),
-    msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс' },
+    msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс, скісна риска' },
   callsign: { norm: v => squash(v.replace(APOS, '’')), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} ’.\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
     msg: 'Позивний: літери, цифри, пробіл, дефіс, апостроф (без телефонів і посилань)' },
   name: { norm: v => squash(v.replace(APOS, '’')), ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
@@ -588,7 +596,7 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
     const other = item[`${f.k}_other`];
     if (hasText(other)) { any = true; if (other.length > OTHER_MAX) push(`${path}${f.k}_other`, `Задовгий текст: ${other.length} символів, максимум ${OTHER_MAX}`, `${label} — інше`); }
     // помилка групи стоїть на шляху самої групи (points.N.training), а не на першому рівні
-    if (!any && required(f, item, data)) push(`${path}${f.k}`, 'Вкажіть кількість хоча б для одного рівня або заповніть «Інше»');
+    if (!any && required(f, item, data)) push(`${path}${f.k}`, 'Вкажіть кількість хоча б для одного рівня або заповніть поле «Інше або уточнення»');
     return;
   }
   if (!visible(f, item)) return;
@@ -601,7 +609,7 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
   if (v.length > maxLen(f)) { push(p, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`); return; }
   if (f.t === 'area' && v.split('\n').length > MAX_AREA_LINES) { push(p, `Забагато рядків (${v.split('\n').length}), максимум ${MAX_AREA_LINES} — скоротіть текст`); return; }
   if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, 'Недопустиме значення — оберіть зі списку'); return; }
-  if (f.t === 'date' && !validISODate(v)) { push(p, 'Дата у форматі РРРР-ММ-ДД'); return; }
+  if (f.t === 'date' && !validISODate(v)) { push(p, 'Некоректна дата'); return; }
   const kind = kindOf(f);
   if (kind && !kind.ok(v.trim())) push(p, kind.msg);
   else if (kind === KINDS.count && f.min != null && +v < f.min) push(p, `Не менше ${f.min}`);
@@ -655,10 +663,6 @@ function crossChecks(d, problems, today) {
       const bad = NRK_FEATURES.find(([k]) => p[k] === 'Частково');
       if (bad) push('error', `points.${i}.${bad[0]}`, 'points', i, `НРК — ${bad[1]}`, 'НРК лише один, тому «Частково» не підходить — оберіть «Так» або «Ні» (або виправте кількість)');
     }
-    if (p.supplied === 'Так' && p.need === 'Є')
-      push('warn', `points.${i}.need`, 'points', i, 'Потреба в дозабезпеченні', 'Точка забезпечена повністю, але є потреба в дозабезпеченні — перевірте відповіді');
-    if ((p.supplied === 'Ні' || p.supplied === 'Частково') && p.need === 'Немає')
-      push('warn', `points.${i}.need`, 'points', i, 'Потреба в дозабезпеченні', 'Майна бракує, але потреби в дозабезпеченні немає — перевірте відповіді');
   });
   // Позиції
   const pos = Array.isArray(d.positions) && d.drops === 'Так' ? d.positions : [];
@@ -669,15 +673,16 @@ function crossChecks(d, problems, today) {
     if (hasText(p.coords) && isCoords(p.coords) && !coordsInUkraine(p.coords))
       push('warn', `positions.${i}.coords`, 'drops', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
   });
-  if (d.drops === 'Так' && hasText(d.algo_time) && KINDS.min.ok(d.algo_time) && +d.algo_time > 240)
+  if (dropsDone(d) && hasText(d.algo_time) && KINDS.min.ok(d.algo_time) && +d.algo_time > 240)
     push('warn', 'algo_time', 'algo', undefined, 'Орієнтовний час від запиту до скиду', 'Понад 4 години від запиту до скиду — перевірте, чи число в хвилинах');
 }
 
 const errorsOf = problems => problems.filter(p => p.level === 'error');
 const warningsOf = problems => problems.filter(p => p.level === 'warn');
-// Помилки «нових полів» (НРК, гіпотермія, хімзахист) — для звітів старої форми це очікувано
-const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note'];
-const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path.endsWith('.' + k));
+// Помилки «нових полів» — для звітів попередніх версій форми це очікувано:
+// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи
+const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other'];
+const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)
 function progressOf(d) {
@@ -695,7 +700,7 @@ function progressOf(d) {
   return { total, done };
 }
 
-const POINT_FLAG_KEYS = ['supplied', 'need', 'nrk', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe'];
+const POINT_FLAG_KEYS = ['supplied', 'nrk', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe'];
 
 // ---- src/shared/codec.mjs ----
 // Пакування даних анкети у PDF і читання їх назад.
@@ -753,11 +758,40 @@ function parsePayload(text) {
   return { v: p.v, kind: p.kind === 'draft' ? 'draft' : 'report', created: typeof p.created === 'string' ? p.created : undefined, data: migrate(p.data, p.v) };
 }
 
-// Міграція даних зі старіших версій схеми. Версія 1 відрізняється лише відсутністю нових полів,
-// тож достатньо нормалізації (невідомі ключі відкидаються, приховані — очищаються).
+// Міграція даних зі старіших версій схеми.
+//   v1 → v2: лише нові поля (НРК, гіпотермія, хімзахист) — достатньо нормалізації.
+//   v2 → v3: «забезпечення» + «потреба» об’єднано в одне питання; виправлено рід у варіантах
+//            «Інтернет» («Є, стабільний»); «Потреба в скидах установленого зразка» — Так/Ні;
+//            нове питання «чи здійснюють скиди інші» (виводиться з алгоритму, якщо його було описано).
+//   Ключі v1 і v2 збігаються, тож перетворення v2 → v3 застосовується до обох.
+const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
+const NET_V3 = { 'Є, стабільна': 'Є, стабільний', 'Є, нестабільна': 'Є, нестабільний' };
+const YN_V3 = { 'Є': 'Так', 'Немає': 'Ні' };
+const txt = v => typeof v === 'string' ? v.trim() : '';
+
+function upgradeToV3(src) {
+  const d = { ...src };
+  if (Array.isArray(d.points)) d.points = d.points.map(p => {
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return p;
+    const { need, need_note, ...q } = p;
+    if (q.net in NET_V3) q.net = NET_V3[q.net];
+    const oldSupplied = q.supplied, lack = oldSupplied === 'Частково' || oldSupplied === 'Ні';
+    if (oldSupplied in SUPPLY_V3) q.supplied = SUPPLY_V3[oldSupplied];
+    // повністю забезпечена, але з потребою — тепер це «Часткова» з описом потреби
+    if (oldSupplied === 'Так' && need === 'Є' && txt(need_note)) q.supplied = 'Часткова';
+    const notes = [lack ? txt(q.supplied_note) : '', need === 'Є' ? txt(need_note) : ''].filter(Boolean);
+    if (notes.length) q.supplied_note = [...new Set(notes)].join('\n'); else delete q.supplied_note;
+    return q;
+  });
+  if (d.mp_std in YN_V3) d.mp_std = YN_V3[d.mp_std];
+  if (d.drops === 'Ні' && d.drops_other == null && ['algo_carry', 'algo_hand', 'algo_time'].some(k => txt(d[k]))) d.drops_other = 'Так';
+  return d;
+}
+
 function migrate(data, fromVersion) {
-  const d = normalizeData(data);
-  if (fromVersion < 2) d.migratedFrom = fromVersion;
+  const src = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  const d = normalizeData(fromVersion < 3 ? upgradeToV3(src) : src);
+  if (fromVersion < SCHEMA_VERSION) d.migratedFrom = fromVersion;
   return d;
 }
 
@@ -888,13 +922,12 @@ const L = f => f.pl || f.l;
 const T = s => s.pt || s.title;
 
 // Чи значення «негативне» для підсвічування у зведеннях
-const NEGATIVE = new Set(['Ні', 'Немає', 'Частково', 'Є, нестабільна']);
+const NEGATIVE = new Set(['Ні', 'Немає', 'Частково', 'Часткова', 'Є, нестабільний']);
 // Відсутність НРК чи інтернету — не дефект забезпечення, а особливість точки (жовтий, не червоний)
 const SOFT_KEYS = new Set(['nrk', 'net']);
 const flagColor = (key, v) => {
   if (!hasText(v)) return C.rule;
-  if (key === 'need') return v === 'Є' ? C.bad : C.ok;             // потреба «Є» — погано
-  if (v === 'Частково' || v === 'Є, нестабільна') return C.warn;
+  if (v === 'Частково' || v === 'Часткова' || v === 'Є, нестабільний') return C.warn;
   if (NEGATIVE.has(v)) return SOFT_KEYS.has(key) ? C.warn : C.bad;
   return C.ok;
 };
@@ -979,18 +1012,18 @@ function collectNeeds(d) {
   const out = [];
   (d.points || []).forEach((p, i) => {
     const at = `Точка ${i + 1}${hasText(p.name) ? ` «${p.name.trim()}»` : ''}`;
-    if (p.need === 'Є' && hasText(p.need_note)) out.push({ where: at, what: 'Дозабезпечення: ' + p.need_note.trim(), level: 'bad' });
-    if ((p.supplied === 'Ні' || p.supplied === 'Частково') && hasText(p.supplied_note)) out.push({ where: at, what: `Майно (${p.supplied.toLowerCase()}): ${p.supplied_note.trim()}`, level: 'bad' });
+    if ((p.supplied === 'Часткова' || p.supplied === 'Немає') && hasText(p.supplied_note))
+      out.push({ where: at, what: `Бракує медмайна: ${p.supplied_note.trim()}`, level: 'bad' });
     const hypo = [['hypo_heat', 'хімічних грілок'], ['hypo_bag', 'спальників'], ['hypo_ready', 'Ready-Heat']].filter(([k]) => p[k] === NONE).map(([, n]) => n);
     if (hypo.length) out.push({ where: at, what: 'Немає засобів проти гіпотермії: ' + hypo.join(', '), level: 'bad' });
     if (p.ppe === NONE) out.push({ where: at, what: 'Немає засобів хімзахисту', level: 'bad' });
-    if (p.ppe === 'Частково') out.push({ where: at, what: 'Хімзахист частково' + (hasText(p.ppe_note) ? ': ' + p.ppe_note.trim() : ''), level: 'warn' });
+    if (p.ppe === 'Частково') out.push({ where: at, what: 'Хімзахист — частково' + (hasText(p.ppe_note) ? ': ' + p.ppe_note.trim() : ''), level: 'warn' });
     if (p.nrk === NONE) out.push({ where: at, what: 'НРК немає', level: 'note' });
     if (p.net === NONE) out.push({ where: at, what: 'Інтернету немає', level: 'note' });
     if (trainingTotal(p) === 0 && !hasText(p.training_other)) out.push({ where: at, what: 'Підготовленого персоналу не вказано', level: 'bad' });
   });
   if (d.mp_help === 'Так' && hasText(d.mp_help_note)) out.push({ where: 'Медпункт', what: 'Потрібна допомога у формуванні скидів: ' + d.mp_help_note.trim(), level: 'bad' });
-  if (d.mp_std === 'Є' && hasText(d.mp_std_qty)) out.push({ where: 'Медпункт', what: 'Скиди встановленого зразка: ' + d.mp_std_qty.trim(), level: 'warn' });
+  if (d.mp_std === 'Так' && hasText(d.mp_std_qty)) out.push({ where: 'Медпункт', what: 'Скиди встановленого зразка: ' + d.mp_std_qty.trim(), level: 'warn' });
   return out;
 }
 
@@ -1015,14 +1048,14 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
   // Зведення по точках
   const points = (d.points || []).filter(nonEmpty);
   const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
-  const SUMW = [12, '*', 48, 44, 44, 36, 46, 46, 46, 40], fitName = k.fit(starWidth(SUMW, PAGE.cw), z(8.5));
+  const SUMW = [12, '*', 52, 44, 40, 48, 50, 48, 40], fitName = k.fit(starWidth(SUMW, PAGE.cw), z(8.5));
   const summary = points.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true,
     widths: SUMW,
-    body: [[head('№'), head('Точка'), head('Майно'), head('Потреба'), head('НРК'), head('Грілки'), head('Спальники'), head('Ready-Heat'), head('Хімзахист'), head('Підгот.')],
+    body: [[head('№'), head('Точка'), head('Майно'), head('НРК'), head('Грілки'), head('Спальники'), head('Ready-Heat'), head('Хімзахист'), head('Підгот.')],
       ...points.map((p, i) => [
         { text: String(i + 1), color: THEME.grey, fontSize: z(8) },
         { stack: [{ text: hasText(p.name) ? fitName(p.name.trim()) : '—', bold: true, fontSize: z(8.5) }, { text: p.coords || '', color: C.grey, fontSize: z(7) }] },
-        pill('supplied', p.supplied), pill('need', p.need), pill('nrk', nrkShort(p)),
+        pill('supplied', p.supplied), pill('nrk', nrkShort(p)),
         pill('hypo', p.hypo_heat), pill('hypo', p.hypo_bag), pill('hypo', p.hypo_ready), pill('ppe', p.ppe),
         { text: trainingTotal(p) > 0 ? people(trainingTotal(p)) : hasText(p.training_other) ? 'інше ↓' : '—', bold: trainingTotal(p) > 0, color: trainingTotal(p) > 0 ? C.ink : hasText(p.training_other) ? C.grey : C.bad, fontSize: z(8) },
       ])] } } : null;
@@ -1076,7 +1109,8 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     sec(T(pts) + ' — детально'),
     ...(detail.length ? detail : [{ text: 'Точок не вказано', color: C.grey }]),
     sec(T(pos)), positions,
-    sec(T(algo)), kv(algo.fields, d),
+    sec(T(algo)), dropsDone(d) ? kv(algo.fields, d)
+      : { text: noDrops(d) ? 'Медичні скиди для підрозділу не здійснюються' : '—', color: C.grey },
     sec(T(mp)), kv(mp.fields, d),
     sec('Потреби та зауваги'), needsBlock,
   ];
@@ -1091,7 +1125,7 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     ...(draft ? { background: () => ({ text: 'ЧЕРНЕТКА', color: '#f3d3d5', bold: true, fontSize: 78, font: THEME.head, alignment: 'center', margin: [0, 360, 0, 0] }) } : {}),
     header: cur => cur > 1 ? { margin: [PAGE.m, 18, PAGE.m, 0], fontSize: 7, color: C.grey, text: tag } : null,
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${TITLE}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${version ? ` Форма ${version}.` : ''}` },
+      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${version ? ` Форма ${version}.` : ''}` },
       { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }),
   };
 }
@@ -1162,7 +1196,7 @@ const idOf = path => 'f_' + path.replace(/\W/g, '_');
 function fieldHtml(f, path, item) {
   const id = idOf(path);
   const hidden = !visible(f, item) ? ' hidden' : '';   // атрибут hidden, не клас
-  const show = f.showIf ? ` data-showif="${esc(f.showIf[0])}" data-showvals="${esc(JSON.stringify(f.showIf[1]))}"` : '';
+  const show = f.showIf ? ' data-cond' : '';
   const req = required(f, item, data);
   const star = req ? '<span class="req" aria-hidden="true">*</span>' : '';
   const label = `<label class="lbl" for="${id}">${esc(f.l)}${star}</label>`;
@@ -1252,7 +1286,8 @@ function sectionHtml(s) {
   const note = s.note ? `<p class="note">${esc(s.note)}</p>` : '';
   const hint = s.hint ? `<p class="hint">${esc(s.hint)}</p>` : '';
   const multi = stepOfSection(s.id).sections.length > 1;
-  return `<section class="sec" data-section="${s.id}">${multi ? `<h3>${esc(s.title)}</h3>` : ''}${note}${hint}${fields}${s.list ? listHtml(s) : ''}</section>`;
+  const cond = s.showIf ? ` data-cond${visible(s, data) ? '' : ' hidden'}` : '';
+  return `<section class="sec" data-section="${s.id}"${cond}>${multi ? `<h3>${esc(s.title)}</h3>` : ''}${note}${hint}${fields}${s.list ? listHtml(s) : ''}</section>`;
 }
 
 // ---------- крок перевірки ----------
@@ -1319,7 +1354,7 @@ function render({ keepScroll = false } = {}) {
   <main class="main">
     ${step === 0 ? introHtml() : ''}
     <h2 class="h2"><small>Крок ${step + 1} з ${STEPS.length}</small>${esc(st.title)}</h2>
-    ${st.id === 'kb' ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : ''}
+    ${ROLES.some(r => r.role === st.id) ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : ''}
     ${st.final ? checkHtml() : st.sections.map(id => sectionHtml(sectionById(id))).join('')}
   </main>
   <footer class="nav">
@@ -1339,10 +1374,10 @@ function introHtml() {
   return `<details class="intro"><summary>Як працює анкета</summary>
     <ol>
       <li>Заповніть кроки по черзі. Поля з <span class="req">*</span> обов’язкові. Якщо щось не так — поле підсвітиться й з’явиться підказка.</li>
-      <li>На останньому кроці форма покаже все, що треба виправити. Звіт PDF завантажиться лише коли помилок не буде.</li>
+      <li>На останньому кроці форма покаже все, що треба виправити. Звіт PDF можна буде завантажити лише тоді, коли помилок не залишиться.</li>
       <li>Готовий PDF надішліть черговому медслужби <b>лише через Element</b>. Інші месенджери заборонені.</li>
       <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт або чернетку — дані підставляться у форму.</li>
-      <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')} (де це дозволено); вона видаляється після завантаження звіту або кнопкою «Очистити».</li>
+      <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}, якщо браузер це дозволяє. Копія видаляється після завантаження звіту або кнопкою «Очистити».</li>
     </ol></details>`;
 }
 
@@ -1383,10 +1418,11 @@ function refreshErrors() {
 // Показ/приховування умовних полів. Значення прихованих полів лишаються в data (на випадок, якщо відповідь повернуть),
 // а зі звіту їх прибирає normalizeData.
 function refreshVisibility(root) {
-  $$('[data-showif]', root).forEach(el => {
-    const item = itemOf(el.dataset.field);
-    el.hidden = !JSON.parse(el.dataset.showvals).includes(item?.[el.dataset.showif]);
+  $$('[data-field][data-cond]', root).forEach(el => {
+    const f = fieldDef(el.dataset.field);
+    if (f) el.hidden = !visible(f, itemOf(el.dataset.field));
   });
+  $$('[data-section][data-cond]', root).forEach(el => { el.hidden = !visible(sectionById(el.dataset.section), data); });
   $$('[data-list]', root).forEach(el => { const l = listDef(el.dataset.list); el.hidden = !visible({ showIf: l.showIf }, data); });
   // обов’язковість залежить від інших полів (напр. алгоритм від drops) — оновлюємо зірочки
   $$('[data-field]', root).forEach(el => {
@@ -1470,7 +1506,7 @@ app.addEventListener('click', e => {
     const cur = STEPS[step];
     attempted.add(cur.id);
     const errs = stepErrors(cur.id);
-    if (errs.length) toast(`На кроці «${cur.title}» пропущено ${errs.length} ${plural(errs.length, 'помилку', 'помилки', 'помилок')}. Повернутися: «← Назад». Усі помилки буде показано на кроці «Перевірка та звіт».`, 6000);
+    if (errs.length) toast(`На кроці «${cur.title}» лишилося ${errs.length} ${plural(errs.length, 'помилка', 'помилки', 'помилок')}. Виправте їх зараз (← Назад) або пізніше — на кроці «Перевірка та звіт».`, 6000);
     goStep(step + 1); return;
   }
   if (t.id === 'prev') { goStep(step - 1); return; }
@@ -1565,7 +1601,10 @@ function loadDraft() {
     const d = JSON.parse(raw);
     const age = Date.now() - Date.parse(d?.saved);
     if (!d || typeof d !== 'object' || !d.data || !Number.isFinite(age) || age > DRAFT_TTL_DAYS * 86400000) { clearDraft(); return null; }
-    return { saved: d.saved, step: d.step | 0, attempted: Array.isArray(d.attempted) ? d.attempted.filter(x => typeof x === 'string') : [], data: normalizeData(d.data) };
+    // робоча копія могла лишитися від попередньої версії форми — мігруємо так само, як файл
+    const v = Number.isInteger(d.data.v) && d.data.v >= 1 && d.data.v <= SCHEMA_VERSION ? d.data.v : SCHEMA_VERSION;
+    const data = migrate(d.data, v); delete data.migratedFrom;
+    return { saved: d.saved, step: d.step | 0, attempted: Array.isArray(d.attempted) ? d.attempted.filter(x => typeof x === 'string') : [], data };
   } catch { clearDraft(); return null; }
 }
 addEventListener('pagehide', () => { if (dirty) saveDraft(); });
@@ -1617,7 +1656,8 @@ async function openPdf(file) {
     const errs = errors();
     const what = p.kind === 'draft' ? 'Чернетку' : 'Звіт';
     let msg = `${what} ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'} завантажено.`;
-    if (p.legacy || p.data.migratedFrom) msg += ' Це файл старої версії форми: з’явилися нові поля (НРК, гіпотермія, хімзахист) — їх треба заповнити.';
+    if (p.legacy || p.data.migratedFrom === 1) msg += ' Це файл старої версії форми: з’явилися нові поля (НРК, гіпотермія, хімзахист) — їх треба заповнити.';
+    else if (p.data.migratedFrom) msg += ' Це файл попередньої версії форми: питання про медичне майно об’єднано в одне, а для скидів додано питання про інші підрозділи — перевірте ці відповіді.';
     if (errs.length) msg += ` Залишилося виправити: ${errs.length} ${plural(errs.length, 'помилку', 'помилки', 'помилок')}.`;
     delete data.migratedFrom;
     goStep(STEPS.length - 1);

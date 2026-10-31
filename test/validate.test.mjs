@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KINDS, normalizeData, validateData, errorsOf, warningsOf, progressOf, normCoords, isCoords, normPhone } from '../src/shared/validate.mjs';
 import { SECTIONS, STEPS, emptyData, stepOfSection, POINT_FIELDS } from '../src/shared/schema.mjs';
-import { FULL, LEGACY_V1 } from './fixtures.mjs';
+import { FULL, LEGACY_V1, POINT_V2 } from './fixtures.mjs';
+import { migrate } from '../src/shared/codec.mjs';
 
 const TODAY = '2026-10-31';
 const errs = d => errorsOf(validateData(normalizeData(d), { today: TODAY }));
@@ -75,9 +76,9 @@ test('позивний і підрозділ', () => {
 
 test('умовна обов’язковість: примітки з’являються лише за відповідних відповідей', () => {
   const d = clone();
-  d.points[1].supplied = 'Ні'; delete d.points[1].supplied_note;
+  d.points[1].supplied = 'Немає'; delete d.points[1].supplied_note;
   assert.ok(errs(d).some(x => x.path === 'points.1.supplied_note'));
-  d.points[1].supplied = 'Так'; d.points[1].supplied_note = 'сміття';
+  d.points[1].supplied = 'Повна'; d.points[1].supplied_note = 'сміття';
   const n = normalizeData(d);
   assert.equal(n.points[1].supplied_note, undefined, 'приховане поле очищається');
   d.points[1].ppe = 'Частково';
@@ -130,7 +131,7 @@ test('чергові: усі чотири месенджери «Немає» �
   assert.equal(normalizeData(d).s4_phone, '+380 50 111 22 33');
 });
 
-test('перехресні звірки: дата, дублікати, суперечності забезпечення', () => {
+test('перехресні звірки: дата, дублікати, однакові телефони', () => {
   const d = clone();
   d.date = '2027-01-01';
   assert.ok(errs(d).some(x => x.path === 'date' && /майбутньому/.test(x.msg)));
@@ -142,8 +143,6 @@ test('перехресні звірки: дата, дублікати, супе�
   d.points[1].name = 'Школа'; d.points[1].coords = d.points[0].coords;
   assert.ok(warns(d).some(x => x.path === 'points.1.coords'));
   d.points[1].coords = FULL.points[1].coords;
-  d.points[1].supplied = 'Так'; d.points[1].need = 'Є'; d.points[1].need_note = 'щось';
-  assert.ok(warns(d).some(x => x.path === 'points.1.need'));
   d.kb_phone = d.s4_phone = d.mp_phone = '+380 67 123 45 67';
   assert.ok(warns(d).some(x => x.path === 'kb_phone' && /Однаковий/.test(x.msg)));
 });
@@ -158,9 +157,14 @@ test('позиції для скидів: обов’язкові за «Так�
   d.drops = 'Ні';
   assert.equal(errs(d).filter(x => x.path.startsWith('positions')).length, 0);
   assert.deepEqual(normalizeData(d).positions, []);
-  delete d.algo_carry; delete d.algo_hand; delete d.algo_time;
-  assert.equal(errs(d).length, 0, 'алгоритм необов’язковий, якщо позицій немає');
+  assert.ok(errs(d).some(x => x.path === 'drops_other'), 'за «Ні» треба відповісти, чи скидають інші');
+  d.drops_other = 'Ні';
+  assert.equal(errs(d).length, 0, 'скидів немає взагалі — алгоритм не потрібен');
+  assert.equal(normalizeData(d).algo_carry, undefined, 'алгоритм прихований і очищається');
+  d.drops_other = 'Так'; delete d.algo_carry;
+  assert.ok(errs(d).some(x => x.path === 'algo_carry'), 'скидають інші — алгоритм обов’язковий');
   d.drops = 'Так';
+  assert.equal(normalizeData(d).drops_other, undefined, 'за «Так» питання про інших приховане');
   assert.ok(errs(d).some(x => x.path === 'algo_carry'));
 });
 
@@ -176,14 +180,45 @@ test('нормалізація: відкидає невідомі ключі т�
 });
 
 test('міграція даних старої форми: нові поля порожні, приховані значення зникли', () => {
-  const n = normalizeData(LEGACY_V1);
+  const n = migrate(LEGACY_V1, 1);
+  assert.equal(n.migratedFrom, 1);
+  assert.equal(n.points[0].supplied, 'Повна');
   assert.equal(n.points[0].supplied_note, undefined);
   assert.equal(n.points[0].need_note, undefined);
+  assert.equal(n.points[0].net, 'Є, нестабільний');
   assert.equal(n.points[0].training_cls, '0');
+  assert.equal(n.mp_std, 'Ні');
   assert.deepEqual(n.positions, []);
-  const e = errs(LEGACY_V1).map(x => x.path);
+  const e = errs(n).map(x => x.path);
   for (const k of ['nrk', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe']) assert.ok(e.includes(`points.0.${k}`), k);
+  assert.ok(e.includes('drops_other'), 'нове питання про скиди іншими');
   assert.ok(!e.includes('unit'));
+});
+
+test('міграція v2 → v3: «забезпечення» + «потреба» → одне питання, рід у «Інтернет», Так/Ні для скидів зразка', () => {
+  const base = { ...FULL, mp_std: 'Є', points: [POINT_V2] };
+  const n = migrate(base, 2);
+  assert.equal(n.migratedFrom, 2);
+  const p = n.points[0];
+  assert.equal(p.supplied, 'Часткова');
+  assert.equal(p.supplied_note, 'бракує турнікетів\nтурнікети — 10 шт.');
+  assert.equal(p.need, undefined); assert.equal(p.need_note, undefined);
+  assert.equal(p.net, 'Є, стабільний'); assert.equal(p.net_note, 'Starlink');
+  assert.equal(n.mp_std, 'Так');
+  // повністю забезпечена, але з потребою → «Часткова» з описом потреби
+  const full = migrate({ points: [{ supplied: 'Так', supplied_note: 'застаріле', need: 'Є', need_note: 'ще 5 турнікетів' }] }, 2).points[0];
+  assert.equal(full.supplied, 'Часткова'); assert.equal(full.supplied_note, 'ще 5 турнікетів');
+  // без потреби — «Повна», застаріле уточнення зникає
+  const ok = migrate({ points: [{ supplied: 'Так', supplied_note: 'застаріле', need: 'Немає' }] }, 2).points[0];
+  assert.equal(ok.supplied, 'Повна'); assert.equal(ok.supplied_note, undefined);
+  // drops = Ні з описаним алгоритмом → скиди здійснюють інші
+  const other = migrate({ drops: 'Ні', algo_carry: 'сусідній батальйон', algo_hand: 'їхній оператор', algo_time: '30' }, 2);
+  assert.equal(other.drops_other, 'Так'); assert.equal(other.algo_carry, 'сусідній батальйон');
+  assert.equal(migrate({ drops: 'Ні' }, 2).drops_other, undefined, 'без алгоритму — лишаємо питання відкритим');
+  // повний v2-звіт після міграції — без помилок
+  assert.deepEqual(errs(migrate({ ...FULL, points: [POINT_V2], mp_std: 'Є' }, 2)).map(x => x.path), []);
+  // поточна версія не перетворюється повторно
+  assert.equal(migrate(FULL, 3).migratedFrom, undefined);
 });
 
 test('транслітерація імен файлів', async () => {

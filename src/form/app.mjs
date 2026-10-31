@@ -1,9 +1,9 @@
 // Анкета для підрозділів: покрокова форма з живою перевіркою, чернетками й звітом PDF.
 
-import { STEPS, SECTIONS, NONE, FORM_NAME, CONTACTS_NOTE, sectionById, listDef, visible, required, emptyData, stepOfSection } from './schema.mjs';
+import { STEPS, SECTIONS, ROLES, NONE, FORM_NAME, CONTACTS_NOTE, SCHEMA_VERSION, sectionById, listDef, visible, required, emptyData, stepOfSection } from './schema.mjs';
 import { hasText, esc, fmtDate, todayISO, safeFileName, plural } from './text.mjs';
 import { KINDS, kindOf, maxLen, validateData, normalizeData, errorsOf, warningsOf, progressOf, OTHER_MAX } from './validate.mjs';
-import { readPdfBytes } from './codec.mjs';
+import { readPdfBytes, migrate } from './codec.mjs';
 import { buildReport } from './report.mjs';
 import { loadFonts } from './pdfkit.mjs';
 import { iconSvg } from './icons.mjs';
@@ -64,7 +64,7 @@ const idOf = path => 'f_' + path.replace(/\W/g, '_');
 function fieldHtml(f, path, item) {
   const id = idOf(path);
   const hidden = !visible(f, item) ? ' hidden' : '';   // атрибут hidden, не клас
-  const show = f.showIf ? ` data-showif="${esc(f.showIf[0])}" data-showvals="${esc(JSON.stringify(f.showIf[1]))}"` : '';
+  const show = f.showIf ? ' data-cond' : '';
   const req = required(f, item, data);
   const star = req ? '<span class="req" aria-hidden="true">*</span>' : '';
   const label = `<label class="lbl" for="${id}">${esc(f.l)}${star}</label>`;
@@ -154,7 +154,8 @@ function sectionHtml(s) {
   const note = s.note ? `<p class="note">${esc(s.note)}</p>` : '';
   const hint = s.hint ? `<p class="hint">${esc(s.hint)}</p>` : '';
   const multi = stepOfSection(s.id).sections.length > 1;
-  return `<section class="sec" data-section="${s.id}">${multi ? `<h3>${esc(s.title)}</h3>` : ''}${note}${hint}${fields}${s.list ? listHtml(s) : ''}</section>`;
+  const cond = s.showIf ? ` data-cond${visible(s, data) ? '' : ' hidden'}` : '';
+  return `<section class="sec" data-section="${s.id}"${cond}>${multi ? `<h3>${esc(s.title)}</h3>` : ''}${note}${hint}${fields}${s.list ? listHtml(s) : ''}</section>`;
 }
 
 // ---------- крок перевірки ----------
@@ -221,7 +222,7 @@ function render({ keepScroll = false } = {}) {
   <main class="main">
     ${step === 0 ? introHtml() : ''}
     <h2 class="h2"><small>Крок ${step + 1} з ${STEPS.length}</small>${esc(st.title)}</h2>
-    ${st.id === 'kb' ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : ''}
+    ${ROLES.some(r => r.role === st.id) ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : ''}
     ${st.final ? checkHtml() : st.sections.map(id => sectionHtml(sectionById(id))).join('')}
   </main>
   <footer class="nav">
@@ -241,10 +242,10 @@ function introHtml() {
   return `<details class="intro"><summary>Як працює анкета</summary>
     <ol>
       <li>Заповніть кроки по черзі. Поля з <span class="req">*</span> обов’язкові. Якщо щось не так — поле підсвітиться й з’явиться підказка.</li>
-      <li>На останньому кроці форма покаже все, що треба виправити. Звіт PDF завантажиться лише коли помилок не буде.</li>
+      <li>На останньому кроці форма покаже все, що треба виправити. Звіт PDF можна буде завантажити лише тоді, коли помилок не залишиться.</li>
       <li>Готовий PDF надішліть черговому медслужби <b>лише через Element</b>. Інші месенджери заборонені.</li>
       <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт або чернетку — дані підставляться у форму.</li>
-      <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')} (де це дозволено); вона видаляється після завантаження звіту або кнопкою «Очистити».</li>
+      <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}, якщо браузер це дозволяє. Копія видаляється після завантаження звіту або кнопкою «Очистити».</li>
     </ol></details>`;
 }
 
@@ -285,10 +286,11 @@ function refreshErrors() {
 // Показ/приховування умовних полів. Значення прихованих полів лишаються в data (на випадок, якщо відповідь повернуть),
 // а зі звіту їх прибирає normalizeData.
 function refreshVisibility(root) {
-  $$('[data-showif]', root).forEach(el => {
-    const item = itemOf(el.dataset.field);
-    el.hidden = !JSON.parse(el.dataset.showvals).includes(item?.[el.dataset.showif]);
+  $$('[data-field][data-cond]', root).forEach(el => {
+    const f = fieldDef(el.dataset.field);
+    if (f) el.hidden = !visible(f, itemOf(el.dataset.field));
   });
+  $$('[data-section][data-cond]', root).forEach(el => { el.hidden = !visible(sectionById(el.dataset.section), data); });
   $$('[data-list]', root).forEach(el => { const l = listDef(el.dataset.list); el.hidden = !visible({ showIf: l.showIf }, data); });
   // обов’язковість залежить від інших полів (напр. алгоритм від drops) — оновлюємо зірочки
   $$('[data-field]', root).forEach(el => {
@@ -372,7 +374,7 @@ app.addEventListener('click', e => {
     const cur = STEPS[step];
     attempted.add(cur.id);
     const errs = stepErrors(cur.id);
-    if (errs.length) toast(`На кроці «${cur.title}» пропущено ${errs.length} ${plural(errs.length, 'помилку', 'помилки', 'помилок')}. Повернутися: «← Назад». Усі помилки буде показано на кроці «Перевірка та звіт».`, 6000);
+    if (errs.length) toast(`На кроці «${cur.title}» лишилося ${errs.length} ${plural(errs.length, 'помилка', 'помилки', 'помилок')}. Виправте їх зараз (← Назад) або пізніше — на кроці «Перевірка та звіт».`, 6000);
     goStep(step + 1); return;
   }
   if (t.id === 'prev') { goStep(step - 1); return; }
@@ -467,7 +469,10 @@ function loadDraft() {
     const d = JSON.parse(raw);
     const age = Date.now() - Date.parse(d?.saved);
     if (!d || typeof d !== 'object' || !d.data || !Number.isFinite(age) || age > DRAFT_TTL_DAYS * 86400000) { clearDraft(); return null; }
-    return { saved: d.saved, step: d.step | 0, attempted: Array.isArray(d.attempted) ? d.attempted.filter(x => typeof x === 'string') : [], data: normalizeData(d.data) };
+    // робоча копія могла лишитися від попередньої версії форми — мігруємо так само, як файл
+    const v = Number.isInteger(d.data.v) && d.data.v >= 1 && d.data.v <= SCHEMA_VERSION ? d.data.v : SCHEMA_VERSION;
+    const data = migrate(d.data, v); delete data.migratedFrom;
+    return { saved: d.saved, step: d.step | 0, attempted: Array.isArray(d.attempted) ? d.attempted.filter(x => typeof x === 'string') : [], data };
   } catch { clearDraft(); return null; }
 }
 addEventListener('pagehide', () => { if (dirty) saveDraft(); });
@@ -519,7 +524,8 @@ async function openPdf(file) {
     const errs = errors();
     const what = p.kind === 'draft' ? 'Чернетку' : 'Звіт';
     let msg = `${what} ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'} завантажено.`;
-    if (p.legacy || p.data.migratedFrom) msg += ' Це файл старої версії форми: з’явилися нові поля (НРК, гіпотермія, хімзахист) — їх треба заповнити.';
+    if (p.legacy || p.data.migratedFrom === 1) msg += ' Це файл старої версії форми: з’явилися нові поля (НРК, гіпотермія, хімзахист) — їх треба заповнити.';
+    else if (p.data.migratedFrom) msg += ' Це файл попередньої версії форми: питання про медичне майно об’єднано в одне, а для скидів додано питання про інші підрозділи — перевірте ці відповіді.';
     if (errs.length) msg += ` Залишилося виправити: ${errs.length} ${plural(errs.length, 'помилку', 'помилки', 'помилок')}.`;
     delete data.migratedFrom;
     goStep(STEPS.length - 1);

@@ -69,7 +69,6 @@ const fillPoint = async (i, p) => {
   await fill(path('contact'), p.contact); await seg(path('net'), p.net);
   if (p.net_note) await fill(path('net_note'), p.net_note);
   await seg(path('supplied'), p.supplied); if (p.supplied_note) await fill(path('supplied_note'), p.supplied_note);
-  await seg(path('need'), p.need); if (p.need_note) await fill(path('need_note'), p.need_note);
   await seg(path('nrk'), p.nrk);
   if (p.nrk === 'Є') { await fill(path('nrk_count'), p.nrk_count); for (const k of ['nrk_reb', 'nrk_cam', 'nrk_mic']) await seg(path(k), p[k]); if (p.nrk_note) await fill(path('nrk_note'), p.nrk_note); }
   for (const k of ['hypo_heat', 'hypo_bag', 'hypo_ready']) await seg(path(k), p[k]);
@@ -94,7 +93,15 @@ await page.click('[data-add="points"]');
 await fillPoint(1, FULL.points[1]);
 
 await step(5);
+// «Ні» → питання про інші підрозділи; обидва «Ні» → розділ алгоритму зникає
+await seg('drops', 'Ні');
+assert.ok(await page.isVisible('[data-field="drops_other"]'));
+await seg('drops_other', 'Ні');
+assert.ok(await page.isHidden('[data-section="algo"]'), 'скидів немає — алгоритм прихований');
+await seg('drops_other', 'Так');
+assert.ok(await page.isVisible('[data-section="algo"]'), 'скидають інші — алгоритм видно');
 await seg('drops', FULL.drops);
+assert.ok(await page.isHidden('[data-field="drops_other"]'));
 assert.ok(await page.isVisible('[data-list="positions"]'));
 await page.click('[data-add="positions"]');
 for (const [i, p] of FULL.positions.entries()) { if (i > 0) await page.click('[data-add="positions"]'); for (const k of Object.keys(p)) await fill(`positions.${i}.${k}`, p[k]); }

@@ -1,6 +1,6 @@
 // Плакат A4 «Довідка чергового» — друкує медслужба для себе зі звіту підрозділу.
 
-import { ROLES, CONTACT, sectionById, NONE } from './schema.mjs';
+import { ROLES, CONTACT, sectionById, dropsDone, noDrops, NONE } from './schema.mjs';
 import { hasText, fmtDate, plural } from './text.mjs';
 import { kit, C, THEME, PAGE, ROLE_STYLE, T, textWidth, starWidth } from './pdfkit.mjs';
 import { iconSvg } from './icons.mjs';
@@ -73,10 +73,10 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
   const step = (n, label, body) => ({ width: '*', stack: [
     { text: String(n).padStart(2, '0'), font: THEME.head, bold: true, fontSize: z(16), color: C.ink, lineHeight: 1 },
     { text: label, color: C.grey, fontSize: z(8), margin: [0, z(4), 0, z(2)] }, body] });
-  const algoBlock = [
+  const algoBlock = !dropsDone(d) ? [{ text: noDrops(d) ? 'Медичні скиди для підрозділу не здійснюються' : '—', color: C.grey }] : [
     { columnGap: G, columns: [
-      step(1, 'Хто везе й куди', val(d.algo_carry, z(10))),
-      step(2, 'Хто передає / скидає', val(d.algo_hand, z(10))),
+      step(1, 'Хто доставляє й куди', val(d.algo_carry, z(10))),
+      step(2, 'Хто здійснює скид', val(d.algo_hand, z(10))),
       step(3, 'Від запиту до скиду', hasText(d.algo_time)
         ? { text: [{ text: d.algo_time.trim(), fontSize: z(24), font: THEME.head }, { text: '  хв', fontSize: z(11) }], bold: true, lineHeight: 1 }
         : val('')),

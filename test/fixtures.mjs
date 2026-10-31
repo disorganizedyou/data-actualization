@@ -5,14 +5,14 @@ export const FULL = {
   s4_callsign: 'Тил', s4_phone: '+380 50 765 43 21', s4_signal: 'Немає', s4_element: 'tyl2', s4_discord: 'tyl_2mb',
   mp_callsign: 'Док', mp_phone: '+380 93 111 22 33', mp_signal: '+380 93 111 22 33', mp_element: 'doc.2mb', mp_discord: 'Немає',
   points: [
-    { name: 'Сосна', coords: '37U DQ 12345 67890', contact: 'позивний Сосна, 149.500', net: 'Є, нестабільна', net_note: 'мобільний інтернет',
-      supplied: 'Частково', supplied_note: 'бракує турнікетів і оклюзійних наліпок', need: 'Є', need_note: 'турнікети — 10 шт., наліпки — 6 шт.',
+    { name: 'Сосна', coords: '37U DQ 12345 67890', contact: 'позивний Сосна, 149.500', net: 'Є, нестабільний', net_note: 'мобільний інтернет',
+      supplied: 'Часткова', supplied_note: 'турнікети — 10 шт., оклюзійні наліпки — 6 шт.',
       nrk: 'Є', nrk_count: '2', nrk_reb: 'Частково', nrk_cam: 'Так', nrk_mic: 'Ні', nrk_note: 'Термінатор',
       hypo_heat: 'Є', hypo_bag: 'Немає', hypo_ready: 'Є', hypo_note: 'грілки — 20 шт.',
       ppe: 'Частково', ppe_note: 'протигази — 4 шт., костюми — немає',
       training_asm: '6', training_cls: '2', training_other: '1 водій пройшов курс зупинки кровотечі' },
     { name: 'Школа', coords: '37U DQ 22222 33333', contact: 'Школа, WhatsApp +380 97 000 11 22', net: 'Немає',
-      supplied: 'Так', need: 'Немає',
+      supplied: 'Повна',
       nrk: 'Немає',
       hypo_heat: 'Є', hypo_bag: 'Є', hypo_ready: 'Немає',
       ppe: 'Є',
@@ -24,8 +24,13 @@ export const FULL = {
     { name: 'Птах-2', coords: '37U DQ 11111 44444', weight: '6', flight: '20' },
   ],
   algo_carry: 'Медик роти везе на позицію Птах-1', algo_hand: 'Оператор Птах-1', algo_time: '40',
-  mp_help: 'Так', mp_help_note: 'потрібні термоковдри й пакування', mp_std: 'Є', mp_std_qty: 'пролонгований догляд — 5 шт.',
+  mp_help: 'Так', mp_help_note: 'потрібні термоковдри й пакування', mp_std: 'Так', mp_std_qty: 'пролонгований догляд — 5 шт.',
 };
+
+// Точка у форматі версії 2 (до об’єднання «забезпечення» й «потреби»)
+export const POINT_V2 = { name: 'Сосна', coords: '37U DQ 12345 67890', contact: 'Сосна', net: 'Є, стабільна', net_note: 'Starlink',
+  supplied: 'Частково', supplied_note: 'бракує турнікетів', need: 'Є', need_note: 'турнікети — 10 шт.',
+  nrk: 'Немає', hypo_heat: 'Є', hypo_bag: 'Є', hypo_ready: 'Є', ppe: 'Є', training_asm: '3' };
 
 // Той самий звіт у форматі старої форми (версія 1): без НРК/гіпотермії/хімзахисту, деякі значення «сирі»
 export const LEGACY_V1 = {

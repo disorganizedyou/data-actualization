@@ -54,11 +54,40 @@ export function parsePayload(text) {
   return { v: p.v, kind: p.kind === 'draft' ? 'draft' : 'report', created: typeof p.created === 'string' ? p.created : undefined, data: migrate(p.data, p.v) };
 }
 
-// Міграція даних зі старіших версій схеми. Версія 1 відрізняється лише відсутністю нових полів,
-// тож достатньо нормалізації (невідомі ключі відкидаються, приховані — очищаються).
+// Міграція даних зі старіших версій схеми.
+//   v1 → v2: лише нові поля (НРК, гіпотермія, хімзахист) — достатньо нормалізації.
+//   v2 → v3: «забезпечення» + «потреба» об’єднано в одне питання; виправлено рід у варіантах
+//            «Інтернет» («Є, стабільний»); «Потреба в скидах установленого зразка» — Так/Ні;
+//            нове питання «чи здійснюють скиди інші» (виводиться з алгоритму, якщо його було описано).
+//   Ключі v1 і v2 збігаються, тож перетворення v2 → v3 застосовується до обох.
+const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
+const NET_V3 = { 'Є, стабільна': 'Є, стабільний', 'Є, нестабільна': 'Є, нестабільний' };
+const YN_V3 = { 'Є': 'Так', 'Немає': 'Ні' };
+const txt = v => typeof v === 'string' ? v.trim() : '';
+
+function upgradeToV3(src) {
+  const d = { ...src };
+  if (Array.isArray(d.points)) d.points = d.points.map(p => {
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return p;
+    const { need, need_note, ...q } = p;
+    if (q.net in NET_V3) q.net = NET_V3[q.net];
+    const oldSupplied = q.supplied, lack = oldSupplied === 'Частково' || oldSupplied === 'Ні';
+    if (oldSupplied in SUPPLY_V3) q.supplied = SUPPLY_V3[oldSupplied];
+    // повністю забезпечена, але з потребою — тепер це «Часткова» з описом потреби
+    if (oldSupplied === 'Так' && need === 'Є' && txt(need_note)) q.supplied = 'Часткова';
+    const notes = [lack ? txt(q.supplied_note) : '', need === 'Є' ? txt(need_note) : ''].filter(Boolean);
+    if (notes.length) q.supplied_note = [...new Set(notes)].join('\n'); else delete q.supplied_note;
+    return q;
+  });
+  if (d.mp_std in YN_V3) d.mp_std = YN_V3[d.mp_std];
+  if (d.drops === 'Ні' && d.drops_other == null && ['algo_carry', 'algo_hand', 'algo_time'].some(k => txt(d[k]))) d.drops_other = 'Так';
+  return d;
+}
+
 export function migrate(data, fromVersion) {
-  const d = normalizeData(data);
-  if (fromVersion < 2) d.migratedFrom = fromVersion;
+  const src = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  const d = normalizeData(fromVersion < 3 ? upgradeToV3(src) : src);
+  if (fromVersion < SCHEMA_VERSION) d.migratedFrom = fromVersion;
   return d;
 }
 
