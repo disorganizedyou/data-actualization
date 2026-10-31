@@ -4,6 +4,9 @@ export const FULL = {
   kb_callsign: 'Беркут', kb_phone: '+380 67 123 45 67', kb_signal: 'berkut.07', kb_element: 'berkut', kb_discord: 'Немає',
   s4_callsign: 'Тил', s4_phone: '+380 50 765 43 21', s4_signal: 'Немає', s4_element: 'tyl2', s4_discord: 'tyl_2mb',
   mp_callsign: 'Док', mp_phone: '+380 93 111 22 33', mp_signal: '+380 93 111 22 33', mp_element: 'doc.2mb', mp_discord: 'Немає',
+  medpoints: [
+    { name: 'МП 2МБ', coords: '37U DQ 15000 70000', head_callsign: 'Лікар', head_phone: '+380 66 222 33 44', head_signal: 'Немає', head_element: 'likar.2mb', head_discord: 'Немає' },
+  ],
   points: [
     { name: 'Сосна', coords: '37U DQ 12345 67890', contact: 'позивний Сосна, 149.500', net: 'Є, нестабільний', net_note: 'мобільний інтернет',
       supplied: 'Часткова', supplied_note: 'турнікети — 10 шт., оклюзійні наліпки — 6 шт.',

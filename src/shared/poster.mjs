@@ -4,7 +4,7 @@ import { ROLES, CONTACT, sectionById, dropsDone, noDrops, NONE } from './schema.
 import { hasText, fmtDate, plural } from './text.mjs';
 import { kit, C, THEME, PAGE, ROLE_STYLE, T, textWidth, starWidth } from './pdfkit.mjs';
 import { iconSvg } from './icons.mjs';
-import { nrkShort, nonEmpty, collectNeeds } from './report.mjs';
+import { nrkShort, nonEmpty, collectNeeds, headContacts } from './report.mjs';
 
 export const MIN_SCALE = 0.5;
 
@@ -18,7 +18,7 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
   const header = { columns: [
     { width: '*', stack: [
       { text: 'Довідка чергового', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
-      { text: 'Медична служба: чергові, точки передачі поранених, медичні скиди', color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      { text: 'Медична служба: чергові, медпункти, точки передачі поранених, медичні скиди', color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
       { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] },
       ...(warn ? [{ text: warn.toUpperCase(), color: '#fff', background: C.bad, bold: true, fontSize: z(8), margin: [0, z(6), 0, 0] }] : [])] },
     { width: UNIT_W, stack: [
@@ -46,6 +46,14 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
 
   const head = t => ({ text: t, color: C.grey, fontSize: z(7.5) });
   const num = i => ({ text: String(i + 1), font: THEME.head, bold: true, fontSize: z(14), color: C.ink, lineHeight: 1 });
+  const medRows = (d.medpoints || []).filter(nonEmpty);
+  const MW = [z(18), '*', z(116), z(86), z(150)], fitM = k.fit(starWidth(MW, PAGE.cw), z(11));
+  const medpoints = medRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true, widths: MW,
+    body: [[head('№'), head('Медпункт'), head('Координати MGRS'), head('Начальник'), head('Контакти начальника')],
+      ...medRows.map((m, i) => [num(i), val(fitM(m.name), z(11)), { ...val(m.coords, z(10.5)), noWrap: true },
+        val(m.head_callsign, z(10.5)), headContacts(k, m, { width: z(150), size: z(9.5), iconColor: C.ink, skipNone: true })])] } }
+    : { text: 'Медпунктів не вказано', color: C.grey };
+
   const pointRows = (d.points || []).filter(nonEmpty);
   const nrkCell = p => {
     if (!hasText(p.nrk)) return val('', z(9.5));
@@ -53,7 +61,7 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
     const feats = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([kk]) => p[kk] === 'Так').map(([, n]) => n);
     return { stack: [{ text: nrkShort(p), bold: true, fontSize: z(9.5) }, ...(feats.length ? [{ text: feats.join(', '), color: C.grey, fontSize: z(8) }] : [])] };
   };
-  const PW = [z(18), '*', z(116), z(72), z(72), '*'], PSW = starWidth(PW, PAGE.cw), fitP11 = k.fit(PSW, z(11)), fitP9 = k.fit(PSW, z(9.5));
+  const PW = [z(18), '*', z(116), z(90), z(66), '*'], PSW = starWidth(PW, PAGE.cw), fitP11 = k.fit(PSW, z(11)), fitP9 = k.fit(PSW, z(9.5));
   const points = pointRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true,
     widths: PW,
     body: [[head('№'), head('Назва / орієнтир'), head('Координати MGRS'), head('Інтернет'), head('НРК'), head('Зв’язок з точкою')],
@@ -90,6 +98,7 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
     defaultStyle: { font: 'eU', fontSize: z(9), lineHeight: 1.15, color: C.ink },
     content: [header,
       sec('Чергові'), cards,
+      sec('Медичні пункти'), medpoints,
       sec(T(pts)), points,
       sec(T(pos)), positions,
       sec(T(algo)), ...algoBlock],

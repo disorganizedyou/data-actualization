@@ -1,6 +1,6 @@
 // Інструмент медслужби: відкриває звіти підрозділів (PDF), показує їх стан і друкує плакати.
 
-import { TITLE, ROLES } from './schema.mjs';
+import { TITLE, ROLES, listDef, listOfPath } from './schema.mjs';
 import { hasText, esc, fmtDate, safeFileName, plural } from './text.mjs';
 import { validateData, normalizeData, errorsOf, warningsOf, isNewFieldError } from './validate.mjs';
 import { readPdfBytes } from './codec.mjs';
@@ -106,7 +106,7 @@ function detailsHtml(r) {
   return `<div class="details">
     <div><h4>Чергові</h4><div class="roles">${roles}</div></div>
     <div><h4>Потреби та зауваги (${r.needs.length})</h4>${needs}</div>
-    ${probs.length ? `<div><h4>Помилки та зауваження (${probs.length})</h4><ul class="probs">${probs.map(p => `<li class="${p.level}">${esc(p.item != null ? `${p.path.startsWith('points') ? 'Точка' : 'Позиція'} ${p.item + 1} · ` : '')}${esc(p.label)}: ${esc(p.msg)}</li>`).join('')}</ul></div>` : ''}
+    ${probs.length ? `<div><h4>Помилки та зауваження (${probs.length})</h4><ul class="probs">${probs.map(p => `<li class="${p.level}">${esc(p.item != null ? `${listDef(listOfPath(p.path)).item} ${p.item + 1} · ` : '')}${esc(p.label)}: ${esc(p.msg)}</li>`).join('')}</ul></div>` : ''}
     ${r.created ? `<p class="hint">Файл сформовано ${esc(new Date(r.created).toLocaleString('uk-UA'))}${r.v ? `, схема v${r.v}` : ''}.</p>` : ''}
   </div>`;
 }

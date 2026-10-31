@@ -14,7 +14,7 @@
 //   ph       плейсхолдер
 //   hint     підказка під полем
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const NONE = 'Немає';
 export const TITLE = 'Актуалізація даних для медичної служби';
 export const FORM_NAME = 'Анкета актуалізації даних';
@@ -113,6 +113,20 @@ export const POSITION_FIELDS = [
   { k: 'flight', l: 'Час підльоту до позиції переднього краю, хв', pl: 'Час підльоту, хв', v: 'min', req: true },
 ];
 
+// ---- Медичний пункт: розташування й контакти начальника ----
+export const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `head_${c.k}` }));
+export const MEDPOINT_GROUPS = [
+  { id: 'loc', title: 'Розташування', fields: [
+    { k: 'name', l: 'Назва медпункту', pl: 'Назва', v: 'name', max: 60, req: true, ph: 'наприклад: МП 2МБ, «Берізка»' },
+    { k: 'coords', l: 'Координати медпункту (MGRS)', pl: 'Координати', v: 'coords', req: true },
+  ] },
+  { id: 'head', title: 'Начальник медпункту', fields: [
+    { k: 'head_callsign', l: 'Позивний начальника медпункту', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
+    ...HEAD_CONTACTS,
+  ] },
+];
+export const MEDPOINT_FIELDS = MEDPOINT_GROUPS.flatMap(g => g.fields);
+
 const roleSection = r => ({
   id: r.role, role: r.role, title: r.title, pt: r.short, note: r.note,
   fields: CONTACT.map(f => ({ ...f, k: `${r.role}_${f.k}` })),
@@ -127,15 +141,25 @@ export const SECTIONS = [
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
   ...ROLES.map(roleSection),
+  { id: 'medpoints', title: 'Медичні пункти', pt: 'Медичні пункти',
+    hint: 'Додайте кожен медичний пункт підрозділу. Контакти тут — самого начальника медпункту, щоб медслужба могла зв’язатися з ним напряму.',
+    list: { key: 'medpoints', item: 'Медпункт', addText: 'медпункт', min: 1, keepOne: true,
+      minMsg: 'Додайте хоча б один медпункт',
+      keepMsg: 'Має бути хоча б один медпункт. Можна очистити поля, але не видалити останній медпункт.',
+      groups: MEDPOINT_GROUPS, fields: MEDPOINT_FIELDS } },
   { id: 'points', title: 'Точки передачі поранених', pt: 'Точки передачі поранених',
-    list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, groups: POINT_GROUPS, fields: POINT_FIELDS } },
+    list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, keepOne: true,
+      minMsg: 'Додайте хоча б одну точку',
+      keepMsg: 'Має бути хоча б одна точка передачі. Можна очистити поля, але не видалити останню точку.',
+      groups: POINT_GROUPS, fields: POINT_FIELDS } },
   { id: 'drops', title: 'Позиції, з яких можуть здійснювати медичні скиди', pt: 'Позиції для медичних скидів',
     fields: [
       { k: 'drops', l: 'Чи є в підрозділі позиції, з яких можна здійснювати медичні скиди', pl: 'Чи є такі позиції', t: 'seg', o: OPT.yn, req: true },
       { k: 'drops_other', l: 'Чи здійснюють медичні скиди для вашого підрозділу інші підрозділи', pl: 'Скиди здійснюють інші', t: 'seg', o: OPT.yn, req: true,
         showIf: ['drops', ['Ні']] },
     ],
-    list: { key: 'positions', item: 'Позиція', addText: 'позицію', min: 1, showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
+    list: { key: 'positions', item: 'Позиція', addText: 'позицію', min: 1, minMsg: 'Додайте хоча б одну позицію',
+      showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
   { id: 'algo', title: 'Як відбувається медичний скид', pt: 'Як відбувається медичний скид', showIf: dropsDone,
     fields: [
       { k: 'algo_carry', l: 'Хто доставляє вантаж до місця скиду і куди саме', pl: 'Хто доставляє й куди', t: 'area', max: 500, req: true, showIf: dropsDone },
@@ -154,6 +178,10 @@ export const SECTIONS = [
 ];
 export const sectionById = id => SECTIONS.find(s => s.id === id);
 export const listDef = key => SECTIONS.find(s => s.list && s.list.key === key).list;
+export const LIST_KEYS = SECTIONS.filter(s => s.list).map(s => s.list.key);
+export const listSection = key => SECTIONS.find(s => s.list && s.list.key === key)?.id;
+// Список, до якого належить шлях (points.0.name → def списку points)
+export const listOfPath = path => LIST_KEYS.find(k => path === k || path.startsWith(k + '.'));
 
 // ---- Кроки форми (екрани) ----
 export const STEPS = [
@@ -161,6 +189,7 @@ export const STEPS = [
   { id: 'kb', title: 'Черговий капітан бою', short: 'КБ', sections: ['kb'] },
   { id: 's4', title: 'Черговий S4', short: 'S4', sections: ['s4'] },
   { id: 'mp', title: 'Черговий медичного пункту', short: 'Медпункт', sections: ['mp'] },
+  { id: 'medpoints', title: 'Медичні пункти', short: 'Медпункти', sections: ['medpoints'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
   { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo'] },
   { id: 'mphelp', title: 'Медпункт і скиди', short: 'Скиди МП', sections: ['mphelp'] },
@@ -177,4 +206,4 @@ export const visible = (f, item) => !f.showIf
 export const required = (f, item, data) => visible(f, item) && (typeof f.req === 'function' ? !!f.req(item, data) : !!f.req);
 
 // Порожній документ
-export const emptyData = () => ({ v: SCHEMA_VERSION, points: [{}], positions: [] });
+export const emptyData = () => ({ v: SCHEMA_VERSION, ...Object.fromEntries(LIST_KEYS.map(k => [k, listDef(k).keepOne ? [{}] : []])) });

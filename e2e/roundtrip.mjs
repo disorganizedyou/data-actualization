@@ -40,7 +40,7 @@ const download = async selector => { const [dl] = await Promise.all([page.waitFo
 console.log('▶ анкета: порожня форма');
 await page.goto(FORM);
 await page.waitForSelector('.bar');
-await step(7);
+await step(8);
 assert.ok(await page.isDisabled('#report'), 'порожня форма: кнопка звіту має бути неактивна');
 assert.match(await page.textContent('.box.bad h3'), /Потрібно виправити/);
 
@@ -61,7 +61,15 @@ for (const r of ['kb', 's4', 'mp']) {
   assert.equal(await page.inputValue(`[data-path="${r}_phone"]`), FULL[`${r}_phone`]);
 }
 
+console.log('▶ анкета: медпункти');
 await step(4);
+assert.ok(!(await page.$('[data-del="medpoints:0"]')), 'єдиний медпункт не видаляється');
+for (const [i, m] of FULL.medpoints.entries()) {
+  if (i > 0) await page.click('[data-add="medpoints"]');
+  for (const [k, v] of Object.entries(m)) { if (v === 'Немає') await none(`medpoints.${i}.${k}`); else await fill(`medpoints.${i}.${k}`, v); }
+}
+
+await step(5);
 const fillPoint = async (i, p) => {
   const path = k => `points.${i}.${k}`;
   await fill(path('name'), p.name); await fill(path('coords'), p.coords.replace(/\s/g, '').toLowerCase());
@@ -92,7 +100,7 @@ assert.equal(await page.inputValue('[data-path="points.0.nrk_count"]'), '2');
 await page.click('[data-add="points"]');
 await fillPoint(1, FULL.points[1]);
 
-await step(5);
+await step(6);
 // «Ні» → питання про інші підрозділи; обидва «Ні» → розділ алгоритму зникає
 await seg('drops', 'Ні');
 assert.ok(await page.isVisible('[data-field="drops_other"]'));
@@ -106,12 +114,12 @@ assert.ok(await page.isVisible('[data-list="positions"]'));
 await page.click('[data-add="positions"]');
 for (const [i, p] of FULL.positions.entries()) { if (i > 0) await page.click('[data-add="positions"]'); for (const k of Object.keys(p)) await fill(`positions.${i}.${k}`, p[k]); }
 await fill('algo_carry', FULL.algo_carry); await fill('algo_hand', FULL.algo_hand); await fill('algo_time', FULL.algo_time);
-await step(6);
+await step(7);
 await seg('mp_help', FULL.mp_help); await fill('mp_help_note', FULL.mp_help_note);
 await seg('mp_std', FULL.mp_std); await fill('mp_std_qty', FULL.mp_std_qty);
 
 console.log('▶ анкета: перевірка та звіт');
-await step(7);
+await step(8);
 await page.screenshot({ path: resolve(OUT, 'check.png'), fullPage: true });
 const errBox = await page.$('.box.bad');
 if (errBox) { console.error(await errBox.innerText()); throw new Error('на кроці перевірки лишилися помилки'); }
@@ -125,6 +133,7 @@ const payload = await readPdfBytes(report.bytes, { inflate });
 assert.equal(payload.kind, 'report');
 assert.equal(payload.data.unit, FULL.unit);
 assert.equal(payload.data.points.length, 2);
+assert.deepEqual(payload.data.medpoints, FULL.medpoints, 'медпункти збережено у звіті');
 assert.equal(payload.data.points[0].nrk_count, '2');
 assert.equal(payload.data.positions.length, FULL.positions.length);
 // резервний шлях читання: псуємо маркер — має спрацювати вкладений data.json

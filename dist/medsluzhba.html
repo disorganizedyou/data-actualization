@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-1b0HGPoYPR6vGfCI/RWsuSNEmzvDufPnr3hFSKuYp18='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-m1TlYeVkP4Blg9bdVCmew8OcVOq9j0V+2IECoW7MU/g='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Медслужба — плакати зі звітів підрозділів</title>
 <style>
 :root {
@@ -98,7 +98,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-a62b7e3";
+const BUILD_VERSION = "v2-d62905a";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -168,7 +168,7 @@ const iconSvg = (name, color = 'currentColor') =>
 //   ph       плейсхолдер
 //   hint     підказка під полем
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const NONE = 'Немає';
 const TITLE = 'Актуалізація даних для медичної служби';
 const FORM_NAME = 'Анкета актуалізації даних';
@@ -267,6 +267,20 @@ const POSITION_FIELDS = [
   { k: 'flight', l: 'Час підльоту до позиції переднього краю, хв', pl: 'Час підльоту, хв', v: 'min', req: true },
 ];
 
+// ---- Медичний пункт: розташування й контакти начальника ----
+const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `head_${c.k}` }));
+const MEDPOINT_GROUPS = [
+  { id: 'loc', title: 'Розташування', fields: [
+    { k: 'name', l: 'Назва медпункту', pl: 'Назва', v: 'name', max: 60, req: true, ph: 'наприклад: МП 2МБ, «Берізка»' },
+    { k: 'coords', l: 'Координати медпункту (MGRS)', pl: 'Координати', v: 'coords', req: true },
+  ] },
+  { id: 'head', title: 'Начальник медпункту', fields: [
+    { k: 'head_callsign', l: 'Позивний начальника медпункту', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
+    ...HEAD_CONTACTS,
+  ] },
+];
+const MEDPOINT_FIELDS = MEDPOINT_GROUPS.flatMap(g => g.fields);
+
 const roleSection = r => ({
   id: r.role, role: r.role, title: r.title, pt: r.short, note: r.note,
   fields: CONTACT.map(f => ({ ...f, k: `${r.role}_${f.k}` })),
@@ -281,15 +295,25 @@ const SECTIONS = [
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
   ...ROLES.map(roleSection),
+  { id: 'medpoints', title: 'Медичні пункти', pt: 'Медичні пункти',
+    hint: 'Додайте кожен медичний пункт підрозділу. Контакти тут — самого начальника медпункту, щоб медслужба могла зв’язатися з ним напряму.',
+    list: { key: 'medpoints', item: 'Медпункт', addText: 'медпункт', min: 1, keepOne: true,
+      minMsg: 'Додайте хоча б один медпункт',
+      keepMsg: 'Має бути хоча б один медпункт. Можна очистити поля, але не видалити останній медпункт.',
+      groups: MEDPOINT_GROUPS, fields: MEDPOINT_FIELDS } },
   { id: 'points', title: 'Точки передачі поранених', pt: 'Точки передачі поранених',
-    list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, groups: POINT_GROUPS, fields: POINT_FIELDS } },
+    list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, keepOne: true,
+      minMsg: 'Додайте хоча б одну точку',
+      keepMsg: 'Має бути хоча б одна точка передачі. Можна очистити поля, але не видалити останню точку.',
+      groups: POINT_GROUPS, fields: POINT_FIELDS } },
   { id: 'drops', title: 'Позиції, з яких можуть здійснювати медичні скиди', pt: 'Позиції для медичних скидів',
     fields: [
       { k: 'drops', l: 'Чи є в підрозділі позиції, з яких можна здійснювати медичні скиди', pl: 'Чи є такі позиції', t: 'seg', o: OPT.yn, req: true },
       { k: 'drops_other', l: 'Чи здійснюють медичні скиди для вашого підрозділу інші підрозділи', pl: 'Скиди здійснюють інші', t: 'seg', o: OPT.yn, req: true,
         showIf: ['drops', ['Ні']] },
     ],
-    list: { key: 'positions', item: 'Позиція', addText: 'позицію', min: 1, showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
+    list: { key: 'positions', item: 'Позиція', addText: 'позицію', min: 1, minMsg: 'Додайте хоча б одну позицію',
+      showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
   { id: 'algo', title: 'Як відбувається медичний скид', pt: 'Як відбувається медичний скид', showIf: dropsDone,
     fields: [
       { k: 'algo_carry', l: 'Хто доставляє вантаж до місця скиду і куди саме', pl: 'Хто доставляє й куди', t: 'area', max: 500, req: true, showIf: dropsDone },
@@ -308,6 +332,10 @@ const SECTIONS = [
 ];
 const sectionById = id => SECTIONS.find(s => s.id === id);
 const listDef = key => SECTIONS.find(s => s.list && s.list.key === key).list;
+const LIST_KEYS = SECTIONS.filter(s => s.list).map(s => s.list.key);
+const listSection = key => SECTIONS.find(s => s.list && s.list.key === key)?.id;
+// Список, до якого належить шлях (points.0.name → def списку points)
+const listOfPath = path => LIST_KEYS.find(k => path === k || path.startsWith(k + '.'));
 
 // ---- Кроки форми (екрани) ----
 const STEPS = [
@@ -315,6 +343,7 @@ const STEPS = [
   { id: 'kb', title: 'Черговий капітан бою', short: 'КБ', sections: ['kb'] },
   { id: 's4', title: 'Черговий S4', short: 'S4', sections: ['s4'] },
   { id: 'mp', title: 'Черговий медичного пункту', short: 'Медпункт', sections: ['mp'] },
+  { id: 'medpoints', title: 'Медичні пункти', short: 'Медпункти', sections: ['medpoints'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
   { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo'] },
   { id: 'mphelp', title: 'Медпункт і скиди', short: 'Скиди МП', sections: ['mphelp'] },
@@ -331,7 +360,7 @@ const visible = (f, item) => !f.showIf
 const required = (f, item, data) => visible(f, item) && (typeof f.req === 'function' ? !!f.req(item, data) : !!f.req);
 
 // Порожній документ
-const emptyData = () => ({ v: SCHEMA_VERSION, points: [{}], positions: [] });
+const emptyData = () => ({ v: SCHEMA_VERSION, ...Object.fromEntries(LIST_KEYS.map(k => [k, listDef(k).keepOne ? [{}] : []])) });
 
 // ---- src/shared/validate.mjs ----
 // Нормалізація значень, перевірка форматів, обов’язковість і перехресні звірки.
@@ -461,7 +490,7 @@ function normalizeData(raw) {
       out[s.list.key] = items.map(it => normItem(s.list.fields, it));
     }
   }
-  if (!out.points.length) out.points = [{}];
+  for (const k of LIST_KEYS) if (listDef(k).keepOne && !out[k].length) out[k] = [{}];
   if (!visible({ showIf: listDef('positions').showIf }, out)) out.positions = [];
   return out;
 }
@@ -510,7 +539,7 @@ function validateData(d, { today = todayISO() } = {}) {
     if (s.list) {
       const list = s.list, items = Array.isArray(d[list.key]) ? d[list.key] : [];
       if (!visible({ showIf: list.showIf }, d)) continue;
-      if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, `Додайте хоча б одну ${list.addText}`));
+      if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, list.minMsg || `Додайте хоча б один елемент`));
       items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.l, problems); });
     }
   }
@@ -535,6 +564,17 @@ function crossChecks(d, problems, today) {
     const vals = CONTACT.filter(c => c.none).map(c => d[`${r.role}_${c.k}`]);
     if (vals.length && vals.every(v => v === NONE)) push('error', `${r.role}_phone`, r.role, undefined, r.title, 'Потрібен хоча б один спосіб зв’язку з черговим');
   }
+  // Медпункти
+  const meds = Array.isArray(d.medpoints) ? d.medpoints : [];
+  const seenMed = new Map();
+  meds.forEach((m, i) => {
+    const n = (m.name || '').trim().toLowerCase();
+    if (n) { if (seenMed.has(n)) push('error', `medpoints.${i}.name`, 'medpoints', i, 'Назва медпункту', `Така сама назва, як у медпункту ${seenMed.get(n) + 1}`); else seenMed.set(n, i); }
+    if (hasText(m.coords) && isCoords(m.coords) && !coordsInUkraine(m.coords))
+      push('warn', `medpoints.${i}.coords`, 'medpoints', i, 'Координати медпункту', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
+    if (HEAD_CONTACTS.every(c => m[c.k] === NONE))
+      push('error', `medpoints.${i}.head_phone`, 'medpoints', i, 'Начальник медпункту', 'Потрібен хоча б один спосіб зв’язку з начальником медпункту');
+  });
   // Точки
   const pts = Array.isArray(d.points) ? d.points : [];
   const seenName = new Map(), seenCoords = new Map();
@@ -562,9 +602,10 @@ function crossChecks(d, problems, today) {
 const errorsOf = problems => problems.filter(p => p.level === 'error');
 const warningsOf = problems => problems.filter(p => p.level === 'warn');
 // Помилки «нових полів» — для звітів попередніх версій форми це очікувано:
-// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи
+// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичні пункти
 const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other'];
-const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
+const isNewFieldError = p => p.path === 'medpoints' || p.path.startsWith('medpoints.')
+  || NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)
 function progressOf(d) {
@@ -646,6 +687,7 @@ function parsePayload(text) {
 //            «Інтернет» («Є, стабільний»); «Потреба в скидах установленого зразка» — Так/Ні;
 //            нове питання «чи здійснюють скиди інші» (виводиться з алгоритму, якщо його було описано).
 //   Ключі v1 і v2 збігаються, тож перетворення v2 → v3 застосовується до обох.
+//   v3 → v4: новий розділ «Медичні пункти» — достатньо нормалізації (з’явиться порожня картка).
 //   Для всіх версій: обладнання НРК (РЕБ/камера/мікрофон) — лише Так/Ні; давнє «Частково»
 //   не вгадуємо, а очищаємо — форма попросить відповісти заново.
 const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
@@ -888,6 +930,7 @@ const keepHeadings = (cur, after) => cur.headlineLevel === 1 && after.length ===
 
 
 
+
 const cellText = (f, o) => f.t !== 'group' ? o[f.k] : [
   ...f.items.filter(([k]) => +o[`${f.k}_${k}`] > 0).map(([k, , short]) => `${short} — ${people(+o[`${f.k}_${k}`])}`),
   ...(hasText(o[`${f.k}_other`]) ? ['Інше: ' + o[`${f.k}_other`].trim()] : []),
@@ -896,6 +939,16 @@ const cellText = (f, o) => f.t !== 'group' ? o[f.k] : [
 const trainingTotal = p => LEVELS.reduce((s, [k]) => s + (+p[`training_${k}`] > 0 ? +p[`training_${k}`] : 0), 0);
 const nrkShort = p => p.nrk === 'Є' ? `Є${hasText(p.nrk_count) ? ` · ${p.nrk_count.trim()}` : ''}` : p.nrk;
 const nonEmpty = p => p && Object.values(p).some(hasText);
+
+// Контакти начальника медпункту стовпчиком: іконка + значення. skipNone — не показувати «Немає» (плакат)
+function headContacts(k, m, { width, size, iconColor, skipNone = false }) {
+  const wrap = k.wrapTo(width - size - 4, size);
+  const rows = HEAD_CONTACTS.filter(c => !skipNone || (hasText(m[c.k]) && m[c.k] !== NONE));
+  if (!rows.length) return k.val('', size);
+  return { stack: rows.map(c => ({ columnGap: 4, columns: [
+    { svg: iconSvg(c.icon, iconColor), width: size * .85, height: size * .85, margin: [0, size * .15, 0, 0] },
+    { width: '*', ...k.val(wrap(m[c.k]), size) }] })) };
+}
 
 // Список потреб і зауваг з усієї анкети (для розділу «Потреби та зауваги»)
 function collectNeeds(d) {
@@ -935,9 +988,22 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
       { text: ROLE_STYLE[r.role].name, bold: true }, { text: ROLE_STYLE[r.role].sub, color: C.grey }] }] }))],
     ...CONTACT.map(c => [lab(L(c), c.icon), ...ROLES.map(r => val(wrapC(d[`${r.role}_${c.k}`]), z(10)))])] } };
 
+  const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
+
+  // Медичні пункти
+  const meds = (d.medpoints || []).filter(nonEmpty);
+  const MW = [14, '*', 96, 170], fitMed = k.fit(starWidth(MW, PAGE.cw), z(9.5));
+  const medpoints = meds.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true, widths: MW,
+    body: [[head('№'), head('Медпункт'), head('Начальник'), head('Контакти начальника')],
+      ...meds.map((m, i) => [
+        { text: String(i + 1), color: C.grey },
+        { stack: [{ ...val(fitMed(m.name), z(9.5)) }, { text: m.coords || '', color: C.grey, fontSize: z(8) }] },
+        val(m.head_callsign, z(9.5)),
+        headContacts(k, m, { width: 170, size: z(9), iconColor: C.grey }),
+      ])] } } : { text: 'Медпунктів не вказано', color: C.grey };
+
   // Зведення по точках
   const points = (d.points || []).filter(nonEmpty);
-  const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
   const SUMW = [12, '*', 52, 44, 40, 48, 50, 48, 40], fitName = k.fit(starWidth(SUMW, PAGE.cw), z(8.5));
   const summary = points.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true,
     widths: SUMW,
@@ -994,6 +1060,7 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     sec('Контакти чергових'),
     { text: 'Службові контакти чергових акаунтів, а не особисті контакти військовослужбовців.', color: C.grey, margin: [0, 0, 0, z(6)] },
     contacts,
+    sec('Медичні пункти'), medpoints,
     sec('Зведення по точках передачі'),
     summary || { text: 'Точок не вказано', color: C.grey },
     sec(T(pts) + ' — детально'),
@@ -1040,7 +1107,7 @@ function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
   const header = { columns: [
     { width: '*', stack: [
       { text: 'Довідка чергового', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
-      { text: 'Медична служба: чергові, точки передачі поранених, медичні скиди', color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      { text: 'Медична служба: чергові, медпункти, точки передачі поранених, медичні скиди', color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
       { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] },
       ...(warn ? [{ text: warn.toUpperCase(), color: '#fff', background: C.bad, bold: true, fontSize: z(8), margin: [0, z(6), 0, 0] }] : [])] },
     { width: UNIT_W, stack: [
@@ -1068,6 +1135,14 @@ function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
 
   const head = t => ({ text: t, color: C.grey, fontSize: z(7.5) });
   const num = i => ({ text: String(i + 1), font: THEME.head, bold: true, fontSize: z(14), color: C.ink, lineHeight: 1 });
+  const medRows = (d.medpoints || []).filter(nonEmpty);
+  const MW = [z(18), '*', z(116), z(86), z(150)], fitM = k.fit(starWidth(MW, PAGE.cw), z(11));
+  const medpoints = medRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true, widths: MW,
+    body: [[head('№'), head('Медпункт'), head('Координати MGRS'), head('Начальник'), head('Контакти начальника')],
+      ...medRows.map((m, i) => [num(i), val(fitM(m.name), z(11)), { ...val(m.coords, z(10.5)), noWrap: true },
+        val(m.head_callsign, z(10.5)), headContacts(k, m, { width: z(150), size: z(9.5), iconColor: C.ink, skipNone: true })])] } }
+    : { text: 'Медпунктів не вказано', color: C.grey };
+
   const pointRows = (d.points || []).filter(nonEmpty);
   const nrkCell = p => {
     if (!hasText(p.nrk)) return val('', z(9.5));
@@ -1075,7 +1150,7 @@ function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
     const feats = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([kk]) => p[kk] === 'Так').map(([, n]) => n);
     return { stack: [{ text: nrkShort(p), bold: true, fontSize: z(9.5) }, ...(feats.length ? [{ text: feats.join(', '), color: C.grey, fontSize: z(8) }] : [])] };
   };
-  const PW = [z(18), '*', z(116), z(72), z(72), '*'], PSW = starWidth(PW, PAGE.cw), fitP11 = k.fit(PSW, z(11)), fitP9 = k.fit(PSW, z(9.5));
+  const PW = [z(18), '*', z(116), z(90), z(66), '*'], PSW = starWidth(PW, PAGE.cw), fitP11 = k.fit(PSW, z(11)), fitP9 = k.fit(PSW, z(9.5));
   const points = pointRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true,
     widths: PW,
     body: [[head('№'), head('Назва / орієнтир'), head('Координати MGRS'), head('Інтернет'), head('НРК'), head('Зв’язок з точкою')],
@@ -1112,6 +1187,7 @@ function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
     defaultStyle: { font: 'eU', fontSize: z(9), lineHeight: 1.15, color: C.ink },
     content: [header,
       sec('Чергові'), cards,
+      sec('Медичні пункти'), medpoints,
       sec(T(pts)), points,
       sec(T(pos)), positions,
       sec(T(algo)), ...algoBlock],
@@ -1285,7 +1361,7 @@ function detailsHtml(r) {
   return `<div class="details">
     <div><h4>Чергові</h4><div class="roles">${roles}</div></div>
     <div><h4>Потреби та зауваги (${r.needs.length})</h4>${needs}</div>
-    ${probs.length ? `<div><h4>Помилки та зауваження (${probs.length})</h4><ul class="probs">${probs.map(p => `<li class="${p.level}">${esc(p.item != null ? `${p.path.startsWith('points') ? 'Точка' : 'Позиція'} ${p.item + 1} · ` : '')}${esc(p.label)}: ${esc(p.msg)}</li>`).join('')}</ul></div>` : ''}
+    ${probs.length ? `<div><h4>Помилки та зауваження (${probs.length})</h4><ul class="probs">${probs.map(p => `<li class="${p.level}">${esc(p.item != null ? `${listDef(listOfPath(p.path)).item} ${p.item + 1} · ` : '')}${esc(p.label)}: ${esc(p.msg)}</li>`).join('')}</ul></div>` : ''}
     ${r.created ? `<p class="hint">Файл сформовано ${esc(new Date(r.created).toLocaleString('uk-UA'))}${r.v ? `, схема v${r.v}` : ''}.</p>` : ''}
   </div>`;
 }

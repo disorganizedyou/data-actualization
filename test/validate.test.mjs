@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KINDS, normalizeData, validateData, errorsOf, warningsOf, progressOf, normCoords, isCoords, normPhone } from '../src/shared/validate.mjs';
+import { KINDS, normalizeData, validateData, errorsOf, warningsOf, progressOf, normCoords, isCoords, normPhone, isNewFieldError } from '../src/shared/validate.mjs';
 import { SECTIONS, STEPS, emptyData, stepOfSection, POINT_FIELDS } from '../src/shared/schema.mjs';
 import { FULL, LEGACY_V1, POINT_V2 } from './fixtures.mjs';
 import { migrate } from '../src/shared/codec.mjs';
@@ -8,6 +8,7 @@ import { migrate } from '../src/shared/codec.mjs';
 const TODAY = '2026-10-31';
 const errs = d => errorsOf(validateData(normalizeData(d), { today: TODAY }));
 const warns = d => warningsOf(validateData(normalizeData(d), { today: TODAY }));
+const errsOf = errs;
 const clone = () => JSON.parse(JSON.stringify(FULL));
 
 test('схема: кожен розділ має крок, ключі унікальні', () => {
@@ -105,6 +106,27 @@ test('НРК: за «Є» обов’язкові кількість і три �
   assert.ok(errs(d).some(x => x.path === 'points.0.nrk_count' && /менше/.test(x.msg)));
   d.points[1].nrk = 'Немає'; d.points[1].nrk_count = '5';
   assert.equal(normalizeData(d).points[1].nrk_count, undefined, 'за «Немає» кількість очищається');
+});
+
+test('медпункти: обов’язкові назва, координати, начальник і хоча б один контакт', () => {
+  const d = clone();
+  d.medpoints = [{}];
+  const e = errs(d).map(x => x.path);
+  for (const k of ['name', 'coords', 'head_callsign', 'head_phone', 'head_signal', 'head_element', 'head_discord']) assert.ok(e.includes(`medpoints.0.${k}`), k);
+  d.medpoints = [];
+  assert.equal(normalizeData(d).medpoints.length, 1, 'завжди є хоча б одна картка медпункту');
+  d.medpoints = [{ ...FULL.medpoints[0], head_phone: 'Немає', head_element: 'Немає' }];
+  assert.ok(errs(d).some(x => x.path === 'medpoints.0.head_phone' && /начальником/.test(x.msg)), 'усі контакти «Немає» — помилка');
+  d.medpoints = [FULL.medpoints[0], { ...FULL.medpoints[0], name: 'мп 2мб' }];
+  assert.ok(errs(d).some(x => x.path === 'medpoints.1.name' && /Така сама/.test(x.msg)), 'дубль назви');
+  d.medpoints[1].name = 'МП 2'; d.medpoints[1].head_phone = '0661112233';
+  assert.equal(errs(d).length, 0);
+  assert.equal(normalizeData(d).medpoints[1].head_phone, '+380 66 111 22 33', 'телефон нормалізується');
+  // звіт попередньої версії: порожній медпункт — «нове поле», а не помилка
+  const old = migrate({ ...FULL, medpoints: undefined }, 3);
+  assert.equal(old.migratedFrom, 3);
+  const oe = errsOf(old);
+  assert.ok(oe.length && oe.every(isNewFieldError), oe.map(x => x.path).join(', '));
 });
 
 test('гіпотермія та хімзахист обов’язкові для кожної точки', () => {
@@ -220,7 +242,7 @@ test('міграція v2 → v3: «забезпечення» + «потреб�
   // повний v2-звіт після міграції — без помилок
   assert.deepEqual(errs(migrate({ ...FULL, points: [POINT_V2], mp_std: 'Є' }, 2)).map(x => x.path), []);
   // поточна версія не перетворюється повторно
-  assert.equal(migrate(FULL, 3).migratedFrom, undefined);
+  assert.equal(migrate(FULL, 4).migratedFrom, undefined);
 });
 
 test('транслітерація імен файлів', async () => {

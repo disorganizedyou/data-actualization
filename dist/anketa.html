@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-9W9bF57Id5mPXxz9VhgGuhHTpUIfg6vW+wbQ8ZLK+aw='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-RJjf2EDYulhS+rmATUri2+yc0vJIDqxP5P8xjLFApRw='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -210,7 +210,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-a62b7e3";
+const BUILD_VERSION = "v2-d62905a";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -280,7 +280,7 @@ const iconSvg = (name, color = 'currentColor') =>
 //   ph       плейсхолдер
 //   hint     підказка під полем
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const NONE = 'Немає';
 const TITLE = 'Актуалізація даних для медичної служби';
 const FORM_NAME = 'Анкета актуалізації даних';
@@ -379,6 +379,20 @@ const POSITION_FIELDS = [
   { k: 'flight', l: 'Час підльоту до позиції переднього краю, хв', pl: 'Час підльоту, хв', v: 'min', req: true },
 ];
 
+// ---- Медичний пункт: розташування й контакти начальника ----
+const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `head_${c.k}` }));
+const MEDPOINT_GROUPS = [
+  { id: 'loc', title: 'Розташування', fields: [
+    { k: 'name', l: 'Назва медпункту', pl: 'Назва', v: 'name', max: 60, req: true, ph: 'наприклад: МП 2МБ, «Берізка»' },
+    { k: 'coords', l: 'Координати медпункту (MGRS)', pl: 'Координати', v: 'coords', req: true },
+  ] },
+  { id: 'head', title: 'Начальник медпункту', fields: [
+    { k: 'head_callsign', l: 'Позивний начальника медпункту', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
+    ...HEAD_CONTACTS,
+  ] },
+];
+const MEDPOINT_FIELDS = MEDPOINT_GROUPS.flatMap(g => g.fields);
+
 const roleSection = r => ({
   id: r.role, role: r.role, title: r.title, pt: r.short, note: r.note,
   fields: CONTACT.map(f => ({ ...f, k: `${r.role}_${f.k}` })),
@@ -393,15 +407,25 @@ const SECTIONS = [
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
   ...ROLES.map(roleSection),
+  { id: 'medpoints', title: 'Медичні пункти', pt: 'Медичні пункти',
+    hint: 'Додайте кожен медичний пункт підрозділу. Контакти тут — самого начальника медпункту, щоб медслужба могла зв’язатися з ним напряму.',
+    list: { key: 'medpoints', item: 'Медпункт', addText: 'медпункт', min: 1, keepOne: true,
+      minMsg: 'Додайте хоча б один медпункт',
+      keepMsg: 'Має бути хоча б один медпункт. Можна очистити поля, але не видалити останній медпункт.',
+      groups: MEDPOINT_GROUPS, fields: MEDPOINT_FIELDS } },
   { id: 'points', title: 'Точки передачі поранених', pt: 'Точки передачі поранених',
-    list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, groups: POINT_GROUPS, fields: POINT_FIELDS } },
+    list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, keepOne: true,
+      minMsg: 'Додайте хоча б одну точку',
+      keepMsg: 'Має бути хоча б одна точка передачі. Можна очистити поля, але не видалити останню точку.',
+      groups: POINT_GROUPS, fields: POINT_FIELDS } },
   { id: 'drops', title: 'Позиції, з яких можуть здійснювати медичні скиди', pt: 'Позиції для медичних скидів',
     fields: [
       { k: 'drops', l: 'Чи є в підрозділі позиції, з яких можна здійснювати медичні скиди', pl: 'Чи є такі позиції', t: 'seg', o: OPT.yn, req: true },
       { k: 'drops_other', l: 'Чи здійснюють медичні скиди для вашого підрозділу інші підрозділи', pl: 'Скиди здійснюють інші', t: 'seg', o: OPT.yn, req: true,
         showIf: ['drops', ['Ні']] },
     ],
-    list: { key: 'positions', item: 'Позиція', addText: 'позицію', min: 1, showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
+    list: { key: 'positions', item: 'Позиція', addText: 'позицію', min: 1, minMsg: 'Додайте хоча б одну позицію',
+      showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
   { id: 'algo', title: 'Як відбувається медичний скид', pt: 'Як відбувається медичний скид', showIf: dropsDone,
     fields: [
       { k: 'algo_carry', l: 'Хто доставляє вантаж до місця скиду і куди саме', pl: 'Хто доставляє й куди', t: 'area', max: 500, req: true, showIf: dropsDone },
@@ -420,6 +444,10 @@ const SECTIONS = [
 ];
 const sectionById = id => SECTIONS.find(s => s.id === id);
 const listDef = key => SECTIONS.find(s => s.list && s.list.key === key).list;
+const LIST_KEYS = SECTIONS.filter(s => s.list).map(s => s.list.key);
+const listSection = key => SECTIONS.find(s => s.list && s.list.key === key)?.id;
+// Список, до якого належить шлях (points.0.name → def списку points)
+const listOfPath = path => LIST_KEYS.find(k => path === k || path.startsWith(k + '.'));
 
 // ---- Кроки форми (екрани) ----
 const STEPS = [
@@ -427,6 +455,7 @@ const STEPS = [
   { id: 'kb', title: 'Черговий капітан бою', short: 'КБ', sections: ['kb'] },
   { id: 's4', title: 'Черговий S4', short: 'S4', sections: ['s4'] },
   { id: 'mp', title: 'Черговий медичного пункту', short: 'Медпункт', sections: ['mp'] },
+  { id: 'medpoints', title: 'Медичні пункти', short: 'Медпункти', sections: ['medpoints'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
   { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo'] },
   { id: 'mphelp', title: 'Медпункт і скиди', short: 'Скиди МП', sections: ['mphelp'] },
@@ -443,7 +472,7 @@ const visible = (f, item) => !f.showIf
 const required = (f, item, data) => visible(f, item) && (typeof f.req === 'function' ? !!f.req(item, data) : !!f.req);
 
 // Порожній документ
-const emptyData = () => ({ v: SCHEMA_VERSION, points: [{}], positions: [] });
+const emptyData = () => ({ v: SCHEMA_VERSION, ...Object.fromEntries(LIST_KEYS.map(k => [k, listDef(k).keepOne ? [{}] : []])) });
 
 // ---- src/shared/validate.mjs ----
 // Нормалізація значень, перевірка форматів, обов’язковість і перехресні звірки.
@@ -573,7 +602,7 @@ function normalizeData(raw) {
       out[s.list.key] = items.map(it => normItem(s.list.fields, it));
     }
   }
-  if (!out.points.length) out.points = [{}];
+  for (const k of LIST_KEYS) if (listDef(k).keepOne && !out[k].length) out[k] = [{}];
   if (!visible({ showIf: listDef('positions').showIf }, out)) out.positions = [];
   return out;
 }
@@ -622,7 +651,7 @@ function validateData(d, { today = todayISO() } = {}) {
     if (s.list) {
       const list = s.list, items = Array.isArray(d[list.key]) ? d[list.key] : [];
       if (!visible({ showIf: list.showIf }, d)) continue;
-      if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, `Додайте хоча б одну ${list.addText}`));
+      if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, list.minMsg || `Додайте хоча б один елемент`));
       items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.l, problems); });
     }
   }
@@ -647,6 +676,17 @@ function crossChecks(d, problems, today) {
     const vals = CONTACT.filter(c => c.none).map(c => d[`${r.role}_${c.k}`]);
     if (vals.length && vals.every(v => v === NONE)) push('error', `${r.role}_phone`, r.role, undefined, r.title, 'Потрібен хоча б один спосіб зв’язку з черговим');
   }
+  // Медпункти
+  const meds = Array.isArray(d.medpoints) ? d.medpoints : [];
+  const seenMed = new Map();
+  meds.forEach((m, i) => {
+    const n = (m.name || '').trim().toLowerCase();
+    if (n) { if (seenMed.has(n)) push('error', `medpoints.${i}.name`, 'medpoints', i, 'Назва медпункту', `Така сама назва, як у медпункту ${seenMed.get(n) + 1}`); else seenMed.set(n, i); }
+    if (hasText(m.coords) && isCoords(m.coords) && !coordsInUkraine(m.coords))
+      push('warn', `medpoints.${i}.coords`, 'medpoints', i, 'Координати медпункту', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
+    if (HEAD_CONTACTS.every(c => m[c.k] === NONE))
+      push('error', `medpoints.${i}.head_phone`, 'medpoints', i, 'Начальник медпункту', 'Потрібен хоча б один спосіб зв’язку з начальником медпункту');
+  });
   // Точки
   const pts = Array.isArray(d.points) ? d.points : [];
   const seenName = new Map(), seenCoords = new Map();
@@ -674,9 +714,10 @@ function crossChecks(d, problems, today) {
 const errorsOf = problems => problems.filter(p => p.level === 'error');
 const warningsOf = problems => problems.filter(p => p.level === 'warn');
 // Помилки «нових полів» — для звітів попередніх версій форми це очікувано:
-// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи
+// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичні пункти
 const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other'];
-const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
+const isNewFieldError = p => p.path === 'medpoints' || p.path.startsWith('medpoints.')
+  || NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)
 function progressOf(d) {
@@ -758,6 +799,7 @@ function parsePayload(text) {
 //            «Інтернет» («Є, стабільний»); «Потреба в скидах установленого зразка» — Так/Ні;
 //            нове питання «чи здійснюють скиди інші» (виводиться з алгоритму, якщо його було описано).
 //   Ключі v1 і v2 збігаються, тож перетворення v2 → v3 застосовується до обох.
+//   v3 → v4: новий розділ «Медичні пункти» — достатньо нормалізації (з’явиться порожня картка).
 //   Для всіх версій: обладнання НРК (РЕБ/камера/мікрофон) — лише Так/Ні; давнє «Частково»
 //   не вгадуємо, а очищаємо — форма попросить відповісти заново.
 const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
@@ -1000,6 +1042,7 @@ const keepHeadings = (cur, after) => cur.headlineLevel === 1 && after.length ===
 
 
 
+
 const cellText = (f, o) => f.t !== 'group' ? o[f.k] : [
   ...f.items.filter(([k]) => +o[`${f.k}_${k}`] > 0).map(([k, , short]) => `${short} — ${people(+o[`${f.k}_${k}`])}`),
   ...(hasText(o[`${f.k}_other`]) ? ['Інше: ' + o[`${f.k}_other`].trim()] : []),
@@ -1008,6 +1051,16 @@ const cellText = (f, o) => f.t !== 'group' ? o[f.k] : [
 const trainingTotal = p => LEVELS.reduce((s, [k]) => s + (+p[`training_${k}`] > 0 ? +p[`training_${k}`] : 0), 0);
 const nrkShort = p => p.nrk === 'Є' ? `Є${hasText(p.nrk_count) ? ` · ${p.nrk_count.trim()}` : ''}` : p.nrk;
 const nonEmpty = p => p && Object.values(p).some(hasText);
+
+// Контакти начальника медпункту стовпчиком: іконка + значення. skipNone — не показувати «Немає» (плакат)
+function headContacts(k, m, { width, size, iconColor, skipNone = false }) {
+  const wrap = k.wrapTo(width - size - 4, size);
+  const rows = HEAD_CONTACTS.filter(c => !skipNone || (hasText(m[c.k]) && m[c.k] !== NONE));
+  if (!rows.length) return k.val('', size);
+  return { stack: rows.map(c => ({ columnGap: 4, columns: [
+    { svg: iconSvg(c.icon, iconColor), width: size * .85, height: size * .85, margin: [0, size * .15, 0, 0] },
+    { width: '*', ...k.val(wrap(m[c.k]), size) }] })) };
+}
 
 // Список потреб і зауваг з усієї анкети (для розділу «Потреби та зауваги»)
 function collectNeeds(d) {
@@ -1047,9 +1100,22 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
       { text: ROLE_STYLE[r.role].name, bold: true }, { text: ROLE_STYLE[r.role].sub, color: C.grey }] }] }))],
     ...CONTACT.map(c => [lab(L(c), c.icon), ...ROLES.map(r => val(wrapC(d[`${r.role}_${c.k}`]), z(10)))])] } };
 
+  const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
+
+  // Медичні пункти
+  const meds = (d.medpoints || []).filter(nonEmpty);
+  const MW = [14, '*', 96, 170], fitMed = k.fit(starWidth(MW, PAGE.cw), z(9.5));
+  const medpoints = meds.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true, widths: MW,
+    body: [[head('№'), head('Медпункт'), head('Начальник'), head('Контакти начальника')],
+      ...meds.map((m, i) => [
+        { text: String(i + 1), color: C.grey },
+        { stack: [{ ...val(fitMed(m.name), z(9.5)) }, { text: m.coords || '', color: C.grey, fontSize: z(8) }] },
+        val(m.head_callsign, z(9.5)),
+        headContacts(k, m, { width: 170, size: z(9), iconColor: C.grey }),
+      ])] } } : { text: 'Медпунктів не вказано', color: C.grey };
+
   // Зведення по точках
   const points = (d.points || []).filter(nonEmpty);
-  const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
   const SUMW = [12, '*', 52, 44, 40, 48, 50, 48, 40], fitName = k.fit(starWidth(SUMW, PAGE.cw), z(8.5));
   const summary = points.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true,
     widths: SUMW,
@@ -1106,6 +1172,7 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     sec('Контакти чергових'),
     { text: 'Службові контакти чергових акаунтів, а не особисті контакти військовослужбовців.', color: C.grey, margin: [0, 0, 0, z(6)] },
     contacts,
+    sec('Медичні пункти'), medpoints,
     sec('Зведення по точках передачі'),
     summary || { text: 'Точок не вказано', color: C.grey },
     sec(T(pts) + ' — детально'),
@@ -1154,7 +1221,8 @@ let dirty = false;
 let attempted = new Set();     // кроки, на яких натиснули «Далі» — там показуємо всі помилки
 let touched = new Set();       // поля, яких торкалися — там показуємо помилку одразу
 let ack = new Set();           // підтверджені попередження (ключ = path + msg)
-let openCard = { points: 0, positions: 0 };
+const firstCards = () => Object.fromEntries(LIST_KEYS.map(k => [k, 0]));
+let openCard = firstCards();
 let problemsCache = null;
 let reopened = null;           // { date, kind } — з якого файла підставлено дані (нагадування оновити дату)
 let draftOk = true;            // чи працює сховище браузера
@@ -1165,7 +1233,7 @@ const app = $('#app');
 
 // ---------- доступ до даних за шляхом ----------
 const parsePath = path => {
-  const m = path.match(/^(points|positions)\.(\d+)\.(.+)$/);
+  const m = path.match(new RegExp(`^(${LIST_KEYS.join('|')})\\.(\\d+)\\.(.+)$`));
   return m ? { list: m[1], idx: +m[2], key: m[3] } : { key: path };
 };
 const getAt = path => { const p = parsePath(path); return (p.list ? data[p.list]?.[p.idx] : data)?.[p.key] ?? ''; };
@@ -1191,7 +1259,7 @@ const warnings = () => warningsOf(problems());
 const ackKey = w => WARN_ACK_PREFIX + w.path + '|' + w.msg;
 const stepErrors = id => errors().filter(p => p.step === id);
 const fieldProblems = path => problems().filter(p => p.path === path);
-const hasAnyData = () => Object.keys(data).some(k => !['v', 'points', 'positions', 'date'].includes(k)) || data.points.some(p => Object.keys(p).length) || data.positions.length;
+const hasAnyData = () => Object.keys(data).some(k => !['v', 'date', ...LIST_KEYS].includes(k)) || LIST_KEYS.some(k => (data[k] || []).some(it => Object.keys(it).length));
 
 // ---------- рендер полів ----------
 const idOf = path => 'f_' + path.replace(/\W/g, '_');
@@ -1250,7 +1318,7 @@ function fieldHtml(f, path, item) {
 const cardStatus = (listKey, i) => {
   const e = errors().filter(p => p.path.startsWith(`${listKey}.${i}.`)).length;
   if (e) return `<span class="badge bad">${e} ${plural(e, 'помилка', 'помилки', 'помилок')}</span>`;
-  const seen = attempted.has(stepOfSection(listKey === 'points' ? 'points' : 'drops').id) || Object.keys(data[listKey][i]).length > 2;
+  const seen = attempted.has(stepOfSection(listSection(listKey)).id) || Object.keys(data[listKey][i]).length > 2;
   return seen ? '<span class="badge ok">✓ заповнено</span>' : '';
 };
 
@@ -1261,7 +1329,7 @@ function cardHtml(listKey, i) {
   const body = def.groups
     ? def.groups.map(g => `<div class="grp"><h4>${esc(g.title)}</h4>${g.fields.map(f => fieldHtml(f, `${listKey}.${i}.${f.k}`, item)).join('')}</div>`).join('')
     : def.fields.map(f => fieldHtml(f, `${listKey}.${i}.${f.k}`, item)).join('');
-  const canDelete = !(listKey === 'points' && data[listKey].length <= 1);
+  const canDelete = !(def.keepOne && data[listKey].length <= 1);
   return `<article class="card${open ? ' open' : ''}" data-card="${listKey}" data-idx="${i}">
     <header class="card-h">
       <button type="button" class="card-t" data-toggle="${listKey}:${i}" aria-expanded="${open}">
@@ -1299,12 +1367,13 @@ function checkHtml() {
   const byStep = STEPS.filter(s => !s.final).map(s => ({ s, e: errs.filter(p => p.step === s.id) })).filter(x => x.e.length);
   const unacked = warns.filter(w => !ack.has(ackKey(w)));
   const canDownload = !errs.length && !unacked.length;
-  const pts = (data.points || []).length, pos = data.drops === 'Так' ? (data.positions || []).length : 0;
+  const pts = (data.points || []).length, pos = data.drops === 'Так' ? (data.positions || []).length : 0, meds = (data.medpoints || []).length;
   const staleDate = reopened && data.date === reopened.date && data.date !== todayISO();
   return `<section class="sec check">
     <div class="sum">
       <div><span>Підрозділ</span><b>${esc(hasText(data.unit) ? data.unit.toUpperCase() : '—')}</b></div>
       <div><span>Дата</span><b>${esc(fmtDate(data.date) || '—')}</b></div>
+      <div><span>Медпунктів</span><b>${meds}</b></div>
       <div><span>Точок передачі</span><b>${pts}</b></div>
       <div><span>Позицій для скидів</span><b>${data.drops === 'Так' ? pos : data.drops === 'Ні' ? 'немає' : '—'}</b></div>
       <div><span>Заповнено обов’язкових</span><b>${pr.done} з ${pr.total}</b></div>
@@ -1523,7 +1592,7 @@ app.addEventListener('click', e => {
   }
   if (t.dataset.del) {
     const [key, iStr] = t.dataset.del.split(':'), i = +iStr, def = listDef(key);
-    if (data[key].length <= 1 && key === 'points') { toast('Має бути хоча б одна точка передачі. Можна очистити поля, але не видалити останню точку.'); return; }
+    if (data[key].length <= 1 && def.keepOne) { toast(def.keepMsg); return; }
     if (!confirm(`Видалити ${def.addText} ${i + 1}?`)) return;
     data[key].splice(i, 1);
     openCard[key] = Math.max(0, Math.min(openCard[key], data[key].length - 1));
@@ -1572,8 +1641,8 @@ function goStep(i) {
 }
 function gotoPath(path) {
   const p = parsePath(path);
-  const sectionId = p.list ? (p.list === 'points' ? 'points' : 'drops')
-    : SECTIONS.find(s => s.fields?.some(f => f.k === path))?.id || (path === 'points' ? 'points' : path === 'positions' ? 'drops' : null);
+  const sectionId = p.list ? listSection(p.list)
+    : SECTIONS.find(s => s.fields?.some(f => f.k === path))?.id || listSection(path) || null;
   const st = STEPS.findIndex(s => s.sections.includes(sectionId));
   if (p.list) openCard[p.list] = p.idx;
   if (st >= 0) { step = st; render(); }
@@ -1614,10 +1683,12 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && dir
 
 function reset(d) {
   data = d ? { ...emptyData(), ...d } : emptyData();
-  if (!Array.isArray(data.points) || !data.points.length) data.points = [{}];
-  if (!Array.isArray(data.positions)) data.positions = [];
+  for (const k of LIST_KEYS) {
+    if (!Array.isArray(data[k])) data[k] = [];
+    if (listDef(k).keepOne && !data[k].length) data[k] = [{}];
+  }
   if (!hasText(data.date) && !d) data.date = todayISO();
-  step = 0; dirty = false; problemsCache = null; attempted = new Set(); touched = new Set(); ack = new Set(); openCard = { points: 0, positions: 0 }; reopened = null;
+  step = 0; dirty = false; problemsCache = null; attempted = new Set(); touched = new Set(); ack = new Set(); openCard = firstCards(); reopened = null;
   render();
 }
 
@@ -1658,8 +1729,12 @@ async function openPdf(file) {
     const errs = errors();
     const what = p.kind === 'draft' ? 'Чернетку' : 'Звіт';
     let msg = `${what} ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'} завантажено.`;
-    if (p.legacy || p.data.migratedFrom === 1) msg += ' Це файл старої версії форми: з’явилися нові поля (НРК, гіпотермія, хімзахист) — їх треба заповнити.';
-    else if (p.data.migratedFrom) msg += ' Це файл попередньої версії форми: питання про медичне майно об’єднано в одне, а для скидів додано питання про інші підрозділи — перевірте ці відповіді.';
+    const from = p.legacy ? 1 : p.data.migratedFrom;
+    if (from) {
+      const what = [from < 2 && 'НРК, гіпотермія, хімзахист', from < 3 && 'чи здійснюють скиди інші підрозділи', from < 4 && 'медичні пункти'].filter(Boolean);
+      msg += ` Це файл ${from === 1 ? 'старої' : 'попередньої'} версії форми: з’явилися нові питання (${what.join('; ')}) — їх треба заповнити.`;
+      if (from < 3) msg += ' Питання про медичне майно об’єднано в одне — перевірте відповідь.';
+    }
     if (errs.length) msg += ` Залишилося виправити: ${errs.length} ${plural(errs.length, 'помилку', 'помилки', 'помилок')}.`;
     delete data.migratedFrom;
     goStep(STEPS.length - 1);

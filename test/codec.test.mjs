@@ -22,7 +22,7 @@ test('конверт: кодування → маркер → розбір', () 
   const { marker } = encodePayload(p);
   assert.match(marker, /^DANIFORM2:[A-Za-z0-9_-]+\.[0-9a-f]{8}$/);
   const back = parsePayload(findMarker(`garbage ${marker} more`));
-  assert.equal(back.kind, 'report'); assert.equal(back.v, 3);
+  assert.equal(back.kind, 'report'); assert.equal(back.v, 4);
   assert.deepEqual(back.data, p.data);
 });
 

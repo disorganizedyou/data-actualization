@@ -1,9 +1,10 @@
 // Повний звіт (PDF) — те, що підрозділ надсилає медслужбі.
 
-import { ROLES, CONTACT, TITLE, FORM_NAME, LEVELS, POINT_GROUPS, POSITION_FIELDS, sectionById, visible, required, dropsDone, noDrops, NONE } from './schema.mjs';
+import { ROLES, CONTACT, TITLE, FORM_NAME, LEVELS, POINT_GROUPS, POSITION_FIELDS, HEAD_CONTACTS, sectionById, visible, required, dropsDone, noDrops, NONE } from './schema.mjs';
 import { hasText, fmtDate, people, plural } from './text.mjs';
 import { kit, C, THEME, PAGE, ROLE_STYLE, L, T, keepHeadings, starWidth } from './pdfkit.mjs';
 import { pdfEmbedding, makePayload } from './codec.mjs';
+import { iconSvg } from './icons.mjs';
 import { validateData, errorsOf } from './validate.mjs';
 
 export const cellText = (f, o) => f.t !== 'group' ? o[f.k] : [
@@ -14,6 +15,16 @@ export const cellText = (f, o) => f.t !== 'group' ? o[f.k] : [
 export const trainingTotal = p => LEVELS.reduce((s, [k]) => s + (+p[`training_${k}`] > 0 ? +p[`training_${k}`] : 0), 0);
 export const nrkShort = p => p.nrk === 'Є' ? `Є${hasText(p.nrk_count) ? ` · ${p.nrk_count.trim()}` : ''}` : p.nrk;
 export const nonEmpty = p => p && Object.values(p).some(hasText);
+
+// Контакти начальника медпункту стовпчиком: іконка + значення. skipNone — не показувати «Немає» (плакат)
+export function headContacts(k, m, { width, size, iconColor, skipNone = false }) {
+  const wrap = k.wrapTo(width - size - 4, size);
+  const rows = HEAD_CONTACTS.filter(c => !skipNone || (hasText(m[c.k]) && m[c.k] !== NONE));
+  if (!rows.length) return k.val('', size);
+  return { stack: rows.map(c => ({ columnGap: 4, columns: [
+    { svg: iconSvg(c.icon, iconColor), width: size * .85, height: size * .85, margin: [0, size * .15, 0, 0] },
+    { width: '*', ...k.val(wrap(m[c.k]), size) }] })) };
+}
 
 // Список потреб і зауваг з усієї анкети (для розділу «Потреби та зауваги»)
 export function collectNeeds(d) {
@@ -53,9 +64,22 @@ export function buildReport(d, { kind = 'report', created = '', version = '', re
       { text: ROLE_STYLE[r.role].name, bold: true }, { text: ROLE_STYLE[r.role].sub, color: C.grey }] }] }))],
     ...CONTACT.map(c => [lab(L(c), c.icon), ...ROLES.map(r => val(wrapC(d[`${r.role}_${c.k}`]), z(10)))])] } };
 
+  const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
+
+  // Медичні пункти
+  const meds = (d.medpoints || []).filter(nonEmpty);
+  const MW = [14, '*', 96, 170], fitMed = k.fit(starWidth(MW, PAGE.cw), z(9.5));
+  const medpoints = meds.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true, widths: MW,
+    body: [[head('№'), head('Медпункт'), head('Начальник'), head('Контакти начальника')],
+      ...meds.map((m, i) => [
+        { text: String(i + 1), color: C.grey },
+        { stack: [{ ...val(fitMed(m.name), z(9.5)) }, { text: m.coords || '', color: C.grey, fontSize: z(8) }] },
+        val(m.head_callsign, z(9.5)),
+        headContacts(k, m, { width: 170, size: z(9), iconColor: C.grey }),
+      ])] } } : { text: 'Медпунктів не вказано', color: C.grey };
+
   // Зведення по точках
   const points = (d.points || []).filter(nonEmpty);
-  const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
   const SUMW = [12, '*', 52, 44, 40, 48, 50, 48, 40], fitName = k.fit(starWidth(SUMW, PAGE.cw), z(8.5));
   const summary = points.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true,
     widths: SUMW,
@@ -112,6 +136,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '', re
     sec('Контакти чергових'),
     { text: 'Службові контакти чергових акаунтів, а не особисті контакти військовослужбовців.', color: C.grey, margin: [0, 0, 0, z(6)] },
     contacts,
+    sec('Медичні пункти'), medpoints,
     sec('Зведення по точках передачі'),
     summary || { text: 'Точок не вказано', color: C.grey },
     sec(T(pts) + ' — детально'),

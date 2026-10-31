@@ -1,6 +1,6 @@
 // Анкета для підрозділів: покрокова форма з живою перевіркою, чернетками й звітом PDF.
 
-import { STEPS, SECTIONS, ROLES, NONE, FORM_NAME, CONTACTS_NOTE, SCHEMA_VERSION, sectionById, listDef, visible, required, emptyData, stepOfSection } from './schema.mjs';
+import { STEPS, SECTIONS, ROLES, NONE, FORM_NAME, CONTACTS_NOTE, SCHEMA_VERSION, LIST_KEYS, sectionById, listDef, listSection, visible, required, emptyData, stepOfSection } from './schema.mjs';
 import { hasText, esc, fmtDate, todayISO, safeFileName, plural } from './text.mjs';
 import { KINDS, kindOf, maxLen, validateData, normalizeData, errorsOf, warningsOf, progressOf, OTHER_MAX } from './validate.mjs';
 import { readPdfBytes, migrate } from './codec.mjs';
@@ -20,7 +20,8 @@ let dirty = false;
 let attempted = new Set();     // кроки, на яких натиснули «Далі» — там показуємо всі помилки
 let touched = new Set();       // поля, яких торкалися — там показуємо помилку одразу
 let ack = new Set();           // підтверджені попередження (ключ = path + msg)
-let openCard = { points: 0, positions: 0 };
+const firstCards = () => Object.fromEntries(LIST_KEYS.map(k => [k, 0]));
+let openCard = firstCards();
 let problemsCache = null;
 let reopened = null;           // { date, kind } — з якого файла підставлено дані (нагадування оновити дату)
 let draftOk = true;            // чи працює сховище браузера
@@ -31,7 +32,7 @@ const app = $('#app');
 
 // ---------- доступ до даних за шляхом ----------
 const parsePath = path => {
-  const m = path.match(/^(points|positions)\.(\d+)\.(.+)$/);
+  const m = path.match(new RegExp(`^(${LIST_KEYS.join('|')})\\.(\\d+)\\.(.+)$`));
   return m ? { list: m[1], idx: +m[2], key: m[3] } : { key: path };
 };
 const getAt = path => { const p = parsePath(path); return (p.list ? data[p.list]?.[p.idx] : data)?.[p.key] ?? ''; };
@@ -57,7 +58,7 @@ const warnings = () => warningsOf(problems());
 const ackKey = w => WARN_ACK_PREFIX + w.path + '|' + w.msg;
 const stepErrors = id => errors().filter(p => p.step === id);
 const fieldProblems = path => problems().filter(p => p.path === path);
-const hasAnyData = () => Object.keys(data).some(k => !['v', 'points', 'positions', 'date'].includes(k)) || data.points.some(p => Object.keys(p).length) || data.positions.length;
+const hasAnyData = () => Object.keys(data).some(k => !['v', 'date', ...LIST_KEYS].includes(k)) || LIST_KEYS.some(k => (data[k] || []).some(it => Object.keys(it).length));
 
 // ---------- рендер полів ----------
 const idOf = path => 'f_' + path.replace(/\W/g, '_');
@@ -116,7 +117,7 @@ function fieldHtml(f, path, item) {
 const cardStatus = (listKey, i) => {
   const e = errors().filter(p => p.path.startsWith(`${listKey}.${i}.`)).length;
   if (e) return `<span class="badge bad">${e} ${plural(e, 'помилка', 'помилки', 'помилок')}</span>`;
-  const seen = attempted.has(stepOfSection(listKey === 'points' ? 'points' : 'drops').id) || Object.keys(data[listKey][i]).length > 2;
+  const seen = attempted.has(stepOfSection(listSection(listKey)).id) || Object.keys(data[listKey][i]).length > 2;
   return seen ? '<span class="badge ok">✓ заповнено</span>' : '';
 };
 
@@ -127,7 +128,7 @@ function cardHtml(listKey, i) {
   const body = def.groups
     ? def.groups.map(g => `<div class="grp"><h4>${esc(g.title)}</h4>${g.fields.map(f => fieldHtml(f, `${listKey}.${i}.${f.k}`, item)).join('')}</div>`).join('')
     : def.fields.map(f => fieldHtml(f, `${listKey}.${i}.${f.k}`, item)).join('');
-  const canDelete = !(listKey === 'points' && data[listKey].length <= 1);
+  const canDelete = !(def.keepOne && data[listKey].length <= 1);
   return `<article class="card${open ? ' open' : ''}" data-card="${listKey}" data-idx="${i}">
     <header class="card-h">
       <button type="button" class="card-t" data-toggle="${listKey}:${i}" aria-expanded="${open}">
@@ -165,12 +166,13 @@ function checkHtml() {
   const byStep = STEPS.filter(s => !s.final).map(s => ({ s, e: errs.filter(p => p.step === s.id) })).filter(x => x.e.length);
   const unacked = warns.filter(w => !ack.has(ackKey(w)));
   const canDownload = !errs.length && !unacked.length;
-  const pts = (data.points || []).length, pos = data.drops === 'Так' ? (data.positions || []).length : 0;
+  const pts = (data.points || []).length, pos = data.drops === 'Так' ? (data.positions || []).length : 0, meds = (data.medpoints || []).length;
   const staleDate = reopened && data.date === reopened.date && data.date !== todayISO();
   return `<section class="sec check">
     <div class="sum">
       <div><span>Підрозділ</span><b>${esc(hasText(data.unit) ? data.unit.toUpperCase() : '—')}</b></div>
       <div><span>Дата</span><b>${esc(fmtDate(data.date) || '—')}</b></div>
+      <div><span>Медпунктів</span><b>${meds}</b></div>
       <div><span>Точок передачі</span><b>${pts}</b></div>
       <div><span>Позицій для скидів</span><b>${data.drops === 'Так' ? pos : data.drops === 'Ні' ? 'немає' : '—'}</b></div>
       <div><span>Заповнено обов’язкових</span><b>${pr.done} з ${pr.total}</b></div>
@@ -389,7 +391,7 @@ app.addEventListener('click', e => {
   }
   if (t.dataset.del) {
     const [key, iStr] = t.dataset.del.split(':'), i = +iStr, def = listDef(key);
-    if (data[key].length <= 1 && key === 'points') { toast('Має бути хоча б одна точка передачі. Можна очистити поля, але не видалити останню точку.'); return; }
+    if (data[key].length <= 1 && def.keepOne) { toast(def.keepMsg); return; }
     if (!confirm(`Видалити ${def.addText} ${i + 1}?`)) return;
     data[key].splice(i, 1);
     openCard[key] = Math.max(0, Math.min(openCard[key], data[key].length - 1));
@@ -438,8 +440,8 @@ function goStep(i) {
 }
 function gotoPath(path) {
   const p = parsePath(path);
-  const sectionId = p.list ? (p.list === 'points' ? 'points' : 'drops')
-    : SECTIONS.find(s => s.fields?.some(f => f.k === path))?.id || (path === 'points' ? 'points' : path === 'positions' ? 'drops' : null);
+  const sectionId = p.list ? listSection(p.list)
+    : SECTIONS.find(s => s.fields?.some(f => f.k === path))?.id || listSection(path) || null;
   const st = STEPS.findIndex(s => s.sections.includes(sectionId));
   if (p.list) openCard[p.list] = p.idx;
   if (st >= 0) { step = st; render(); }
@@ -480,10 +482,12 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && dir
 
 function reset(d) {
   data = d ? { ...emptyData(), ...d } : emptyData();
-  if (!Array.isArray(data.points) || !data.points.length) data.points = [{}];
-  if (!Array.isArray(data.positions)) data.positions = [];
+  for (const k of LIST_KEYS) {
+    if (!Array.isArray(data[k])) data[k] = [];
+    if (listDef(k).keepOne && !data[k].length) data[k] = [{}];
+  }
   if (!hasText(data.date) && !d) data.date = todayISO();
-  step = 0; dirty = false; problemsCache = null; attempted = new Set(); touched = new Set(); ack = new Set(); openCard = { points: 0, positions: 0 }; reopened = null;
+  step = 0; dirty = false; problemsCache = null; attempted = new Set(); touched = new Set(); ack = new Set(); openCard = firstCards(); reopened = null;
   render();
 }
 
@@ -524,8 +528,12 @@ async function openPdf(file) {
     const errs = errors();
     const what = p.kind === 'draft' ? 'Чернетку' : 'Звіт';
     let msg = `${what} ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'} завантажено.`;
-    if (p.legacy || p.data.migratedFrom === 1) msg += ' Це файл старої версії форми: з’явилися нові поля (НРК, гіпотермія, хімзахист) — їх треба заповнити.';
-    else if (p.data.migratedFrom) msg += ' Це файл попередньої версії форми: питання про медичне майно об’єднано в одне, а для скидів додано питання про інші підрозділи — перевірте ці відповіді.';
+    const from = p.legacy ? 1 : p.data.migratedFrom;
+    if (from) {
+      const what = [from < 2 && 'НРК, гіпотермія, хімзахист', from < 3 && 'чи здійснюють скиди інші підрозділи', from < 4 && 'медичні пункти'].filter(Boolean);
+      msg += ` Це файл ${from === 1 ? 'старої' : 'попередньої'} версії форми: з’явилися нові питання (${what.join('; ')}) — їх треба заповнити.`;
+      if (from < 3) msg += ' Питання про медичне майно об’єднано в одне — перевірте відповідь.';
+    }
     if (errs.length) msg += ` Залишилося виправити: ${errs.length} ${plural(errs.length, 'помилку', 'помилки', 'помилок')}.`;
     delete data.migratedFrom;
     goStep(STEPS.length - 1);
