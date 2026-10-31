@@ -51,7 +51,25 @@ pdfMake.setFonts({
 
 const sha = s => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`;
 
+// Звірка сторонніх файлів із vendor/MANIFEST.json (що саме вбудовано і чи не підмінено)
+export function checkVendor({ update = false } = {}) {
+  const mp = resolve(ROOT, 'vendor/MANIFEST.json');
+  const manifest = JSON.parse(readFileSync(mp, 'utf8'));
+  const bad = [];
+  for (const it of manifest.items) {
+    const actual = createHash('sha256').update(readFileSync(resolve(ROOT, it.file))).digest('hex');
+    if (actual !== it.sha256) { if (update) it.sha256 = actual; else bad.push(`${it.file}: sha256 ${actual} ≠ ${it.sha256} у маніфесті`); }
+  }
+  if (update) writeFileSync(mp, JSON.stringify(manifest, null, 2) + '\n');
+  if (bad.length) throw new Error('Сторонні файли не збігаються з vendor/MANIFEST.json:\n' + bad.join('\n') + '\nЯкщо оновлення навмисне: node build/build.mjs --update-manifest');
+  const pm = read('vendor/pdfmake.min.js').match(/pdfmake v([\d.]+[\w.-]*)/);
+  const declared = manifest.items.find(i => i.file === 'vendor/pdfmake.min.js').version;
+  if (!pm || pm[1] !== declared) throw new Error(`Версія pdfmake у файлі (${pm && pm[1]}) ≠ у маніфесті (${declared})`);
+  return manifest;
+}
+
 export function build({ version = process.env.BUILD_VERSION || gitVersion() } = {}) {
+  checkVendor();
   mkdirSync(resolve(ROOT, 'dist'), { recursive: true });
   const vendor = read('vendor/pdfmake.min.js');
   const fonts = `const FONT_DATA = ${JSON.stringify(fontData())};${FONT_SETUP}`;
@@ -104,6 +122,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--update-manifest')) { checkVendor({ update: true }); console.log('vendor/MANIFEST.json оновлено'); }
   const r = build();
   for (const [f, n] of Object.entries(r)) console.log(`${f}  ${(n / 1024).toFixed(0)} KB`);
 }

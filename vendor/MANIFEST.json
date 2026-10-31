@@ -1,0 +1,46 @@
+{
+  "_": "Сторонні файли, вбудовані у dist/*.html. Збірка звіряє sha256; після оновлення файла перерахуйте: node build/build.mjs --update-manifest",
+  "items": [
+    {
+      "file": "vendor/pdfmake.min.js",
+      "name": "pdfmake (з вбудованими pdfkit 0.20.2, fontkit, pako)",
+      "version": "0.3.13",
+      "source": "https://registry.npmjs.org/pdfmake/-/pdfmake-0.3.13.tgz (build/pdfmake.min.js), integrity sha512-Am2dbb5SuDwnpx1oNlCgZou91p9SMsyUs7Dws+yF6MmZbycfItt53MbyqdVUhFg6fWL3sWwu2acsJV7lzoRLlg==",
+      "license": "MIT (vendor/pdfmake.LICENSE)",
+      "advisories": "https://github.com/advisories?query=pdfmake",
+      "sha256": "1596506cb3f38d4144cc6ea02fdd3ba28e93878eb7f63c079745ec31413329f6"
+    },
+    {
+      "file": "vendor/fonts/eU-Regular.otf",
+      "name": "e-Ukraine Regular",
+      "version": "з попередньої версії форми",
+      "source": "https://www.ukraine.ua/brand/ (e-Ukraine, вільна ліцензія)",
+      "license": "e-Ukraine font license",
+      "sha256": "99da5f554cb416b08a628f94415dfe357a365d0adc0d1d6a2f157a71cb30696b"
+    },
+    {
+      "file": "vendor/fonts/eU-Medium.otf",
+      "name": "e-Ukraine Medium",
+      "version": "з попередньої версії форми",
+      "source": "https://www.ukraine.ua/brand/",
+      "license": "e-Ukraine font license",
+      "sha256": "a29bd4898a61a5b55f1e077787562428496b8bcba763b8576069a94af77e6483"
+    },
+    {
+      "file": "vendor/fonts/eUH-Medium.otf",
+      "name": "e-Ukraine Head Medium",
+      "version": "з попередньої версії форми",
+      "source": "https://www.ukraine.ua/brand/",
+      "license": "e-Ukraine font license",
+      "sha256": "0d8d75a4f92066aa71cff4b4a3a85dd749125de7fc1c1381da4b60734ab39783"
+    },
+    {
+      "file": "vendor/fonts/eUH-Bold.otf",
+      "name": "e-Ukraine Head Bold",
+      "version": "з попередньої версії форми",
+      "source": "https://www.ukraine.ua/brand/",
+      "license": "e-Ukraine font license",
+      "sha256": "8c0a371aae8e7dd3c53fe38f3ed2d729683542f2dee3d488edfdec69b1658759"
+    }
+  ]
+}

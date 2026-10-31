@@ -52,7 +52,7 @@ export function buildPoster(d, sc = 1, { version = '' } = {}) {
     return { stack: [{ text: nrkShort(p), bold: true, fontSize: z(9.5) }, ...(feats.length ? [{ text: feats.join(', '), color: C.grey, fontSize: z(8) }] : [])] };
   };
   const points = pointRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true,
-    widths: [z(18), '*', z(104), z(78), z(74), '*'],
+    widths: [z(18), '*', z(116), z(72), z(72), '*'],
     body: [[head('№'), head('Назва / орієнтир'), head('Координати MGRS'), head('Інтернет'), head('НРК'), head('Зв’язок з точкою')],
       ...pointRows.map((p, i) => [num(i), val(p.name, z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
         { stack: [val(p.net, z(9.5)), ...(hasText(p.net_note) ? [{ text: p.net_note.trim(), color: C.grey, fontSize: z(8.5) }] : [])] },
