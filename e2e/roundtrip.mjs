@@ -152,9 +152,19 @@ await page.goto(FORM);
 await page.waitForSelector('.bar');
 await page.click('#clear');
 await page.setInputFiles('#open', report.path);
-await page.waitForSelector('.box.ok');
+await page.waitForSelector('.notice');
+assert.match(await page.textContent('.h2 small'), /Крок 1 з 7/, 'відкритий звіт починається з першого кроку');
+assert.equal(await page.$$eval('.stp.unrev', e => e.length), 6, 'усі кроки «не переглянуто»');
+await step(6);
+assert.ok(await page.isDisabled('#report'), 'поки кроки не переглянуто — звіт не завантажується');
+assert.match(await page.textContent('.check'), /Не переглянуто кроків/);
+await step(0);
+for (let i = 0; i < 6; i++) await page.click('#next');      // помилок немає — «Далі» переходить одразу
+assert.match(await page.textContent('.h2 small'), /Крок 7 з 7/);
+assert.equal(await page.$$eval('.stp.unrev', e => e.length), 0, 'після проходу кроків — усе переглянуто');
 assert.ok(await page.isVisible('#today'), 'нагадування оновити дату після відкриття звіту');
 assert.ok(await page.isVisible('.box.bad') === false);
+assert.match(await page.textContent('.check'), /Дані не змінилися/, 'без змін — треба підтвердити актуальність');
 for (const cb of await page.$$('[data-ack]')) { if (!(await cb.isChecked())) await cb.click(); }
 const report2 = await download('#report');
 const payload2 = await readPdfBytes(report2.bytes, { inflate });
@@ -164,8 +174,9 @@ console.log('▶ анкета: відкриття звіту старої фор
 await page.goto(FORM);
 await page.waitForSelector('.bar');
 await page.setInputFiles('#open', resolve(ROOT, 'test/fixtures/legacy_v1.pdf'));
-await page.waitForSelector('.check');
+await page.waitForSelector('.notice');
 assert.match(await page.textContent('.notice'), /старої версії/, 'повідомлення про стару версію не зникає само');
+await step(6);
 const legacyItems = await page.$$eval('.check .box li', els => els.map(e => e.textContent));
 assert.ok(legacyItems.some(t => /НРК/.test(t)) && legacyItems.some(t => /хімзахист/.test(t)), 'старий звіт вимагає нові поля');
 assert.ok(await page.isDisabled('#report'));
@@ -198,6 +209,84 @@ await mpage.waitForFunction(() => document.querySelectorAll('.tbl tbody tr:not(.
 const legacyRow = await mpage.textContent('tr:has(.unit:text("МР")) .st');
 assert.match(legacyRow, /стара форма/); assert.match(legacyRow, /1 помилка/, 'нові поля старого звіту — не «помилки»; єдина помилка — підрозділ «МР» не зі списку');
 const regen = await mdl('[data-report]'); assert.match(regen.name, /^Zvit_med_/);
+
+console.log('▶ анкета на екрані комп’ютера: клавіатура, «Далі», історія, дублювання, огляд змін');
+const dctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, locale: 'uk-UA' });
+const dp = await dctx.newPage();
+dp.on('pageerror', e => errors.push('desktop: ' + e.message));
+dp.on('console', m => { if (m.type() === 'error') errors.push('desktop: ' + m.text()); });
+dp.on('dialog', d => d.accept());
+const focused = () => dp.evaluate(() => document.activeElement.dataset.path || document.activeElement.dataset.none || document.activeElement.id || document.activeElement.tagName);
+const h2 = () => dp.textContent('.h2 small');
+await dp.goto(FORM); await dp.waitForSelector('.bar');
+assert.equal(await focused(), 'unit', 'на комп’ютері курсор одразу в першому полі');
+await dp.selectOption('[data-path="unit"]', FULL.unit);
+await dp.focus('[data-path="author"]'); await dp.keyboard.type(FULL.author);
+await dp.keyboard.press('Control+Enter');
+assert.match(await h2(), /Крок 2 з 7/, 'Ctrl+Enter — «Далі»');
+assert.equal(await focused(), 'kb_callsign', 'після «Далі» курсор у першому полі кроку');
+// двоетапне «Далі»: перше натискання лишає на кроці й показує пропуск
+await dp.keyboard.press('Control+Enter');
+assert.match(await h2(), /Крок 2 з 7/, 'з пропусками перше «Далі» не переходить');
+assert.ok(await dp.isVisible('#navnote')); assert.match(await dp.textContent('#next'), /попри пропуски/);
+// заповнення лише з клавіатури: Tab переходить між полями, пробіл ставить «Немає»
+await dp.keyboard.type('Беркут'); await dp.keyboard.press('Tab');
+await dp.keyboard.type('0671234567'); await dp.keyboard.press('Tab'); await dp.keyboard.press('Tab');
+await dp.keyboard.type('berkut.07'); await dp.keyboard.press('Tab'); await dp.keyboard.press('Tab');
+await dp.keyboard.type('berkut'); await dp.keyboard.press('Tab'); await dp.keyboard.press('Tab'); await dp.keyboard.press('Tab');
+assert.equal(await focused(), 'kb_discord'); await dp.keyboard.press('Space');
+assert.equal(await dp.inputValue('[data-path="kb_phone"]'), '+380 67 123 45 67', 'телефон нормалізовано');
+assert.ok(await dp.isHidden('#navnote'), 'пропуски заповнено — «Далі» знову звичайне');
+await dp.keyboard.press('Control+Enter');
+assert.match(await h2(), /Крок 3 з 7/);
+await dp.goBack(); await dp.waitForTimeout(150);
+assert.match(await h2(), /Крок 2 з 7/, 'кнопка браузера «Назад» — попередній крок');
+await dp.goForward(); await dp.waitForTimeout(150);
+assert.match(await h2(), /Крок 3 з 7/, 'кнопка браузера «Вперед» — наступний крок');
+// задовгий позивний — помилка, а не обрізання
+const longCs = 'Дуже-довгий-позивний-якого-не-буває-насправді';
+await dp.fill('[data-path="s4_callsign"]', longCs); await dp.dispatchEvent('[data-path="s4_callsign"]', 'change');
+assert.equal(await dp.inputValue('[data-path="s4_callsign"]'), longCs, 'значення не обрізано');
+assert.match(await dp.textContent('[data-field="s4_callsign"] .err'), /Задовгий текст/);
+// скиди: «Так» з клавіатури — перша картка позиції з’являється сама; «15 хв» → 15
+await dp.click('[data-step="5"]');
+await dp.focus('.seg[data-path="drops"] .seg-btn[tabindex="0"]'); await dp.keyboard.press('Space');
+assert.equal(await dp.$$eval('[data-card="positions"]', e => e.length), 1);
+await dp.fill('[data-path="positions.0.flight"]', '15 хв'); await dp.dispatchEvent('[data-path="positions.0.flight"]', 'change');
+assert.equal(await dp.inputValue('[data-path="positions.0.flight"]'), '15');
+assert.equal(await dp.textContent('[data-field="positions.0.flight"] .err'), '');
+// стрілки в перемикачі обирають варіант
+await dp.focus('.seg[data-path="mp_help"] .seg-btn[tabindex="0"]'); await dp.keyboard.press('ArrowRight');
+assert.equal(await dp.getAttribute('.seg[data-path="mp_help"] .seg-btn[data-val="Ні"]', 'aria-checked'), 'true');
+// дублювання точки: копіюються відповіді, крім назви, координат і зв’язку
+await dp.click('[data-step="4"]');
+await dp.fill('[data-path="points.0.name"]', 'Сосна'); await dp.dispatchEvent('[data-path="points.0.name"]', 'change');
+await dp.click('.seg[data-path="points.0.hypo_bag"] .seg-btn[data-val="Немає"]');
+await dp.fill('[data-path="points.0.training_asm"]', '4'); await dp.dispatchEvent('[data-path="points.0.training_asm"]', 'change');
+await dp.click('[data-dup="points:0"]');
+assert.equal(await dp.$$eval('[data-card="points"]', e => e.length), 2);
+assert.equal(await focused(), 'points.1.name', 'курсор — у назві копії');
+assert.equal(await dp.inputValue('[data-path="points.1.name"]'), '');
+assert.equal(await dp.getAttribute('.seg[data-path="points.1.hypo_bag"] .seg-btn[data-val="Немає"]', 'aria-checked'), 'true');
+assert.equal(await dp.inputValue('[data-path="points.1.training_asm"]'), '4');
+// висота порожньої картки точки на широкому екрані
+await dp.click('[data-add="points"]');
+const cardH = await dp.$eval('.card[data-idx="2"]', e => e.offsetHeight);
+assert.ok(cardH <= 1450, `картка точки на 1440 px заввишки ${cardH} px`);
+for (let i = 0; i < 7; i++) { await dp.click(`[data-step="${i}"]`); await dp.screenshot({ path: resolve(OUT, `desktop-${i + 1}.png`), fullPage: true }); }
+// огляд змін відносно відкритого звіту
+await dp.goto(FORM); await dp.waitForSelector('.bar');
+await dp.click('#clear');
+await dp.setInputFiles('#open', report.path); await dp.waitForSelector('.notice');
+await dp.click('[data-step="1"]');
+await dp.fill('[data-path="kb_phone"]', '0501112233'); await dp.dispatchEvent('[data-path="kb_phone"]', 'change');
+await dp.click('[data-step="6"]');
+assert.match(await dp.textContent('.rv-head'), /змінено 1 відповідь/);
+assert.match(await dp.textContent('.rv tr.chg'), /було: \+380 67 123 45 67/);
+await dp.check('#onlychg');
+assert.equal(await dp.$$eval('.review tr', rows => rows.filter(r => r.offsetParent).length), 1, '«лише змінене» — один рядок');
+await dp.screenshot({ path: resolve(OUT, 'desktop-review.png'), fullPage: true });
+await dctx.close();
 
 await browser.close();
 if (errors.length) { console.error('Помилки консолі:\n' + errors.join('\n')); process.exit(1); }

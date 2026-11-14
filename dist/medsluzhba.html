@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-c/lG+CZkDUzSF1/hhJqI3sP63FCrHamtOUiiss6FJFA='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-jguxIbSvCIpAVx9mR/ft/IteOfSNhgO/sQiiM5KV+ls='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Медслужба — плакати зі звітів підрозділів</title>
 <style>
 :root {
@@ -98,7 +98,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-8df5499";
+const BUILD_VERSION = "v2-37b795a";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -169,6 +169,8 @@ const iconSvg = (name, color = 'currentColor') =>
 //   ph       плейсхолдер
 //   hint     підказка під полем
 //   el       підпис у списку помилок, якщо l без контексту картки неоднозначний (за замовчуванням = l)
+//   w        ширина поля на широкому екрані в шостих частках рядка: 2 (третина), 3 (половина), 6 (весь рядок);
+//            без w — за типом поля (див. spanOf у src/form/app.mjs)
 
 const SCHEMA_VERSION = 5;
 const NONE = 'Немає';
@@ -232,7 +234,7 @@ const LEVELS = [
 
 // Контакти чергового (поля однакові для всіх трьох ролей; у даних ключ = роль + '_' + k)
 const CONTACT = [
-  { k: 'callsign', l: 'Позивний чергового', pl: 'Позивний', v: 'callsign', max: 30, req: true, ph: 'наприклад: Сокіл' },
+  { k: 'callsign', l: 'Позивний чергового', pl: 'Позивний', v: 'callsign', max: 30, req: true, ph: 'наприклад: Сокіл', w: 6 },
   { k: 'phone', l: 'WhatsApp', icon: 'whatsapp', v: 'phone', none: true, req: true },
   { k: 'signal', l: 'Signal', icon: 'signal', v: 'signal', none: true, req: true },
   { k: 'element', l: 'Element', icon: 'element', v: 'element', none: true, req: true },
@@ -263,7 +265,7 @@ const POINT_GROUPS = [
   ] },
   { id: 'link', title: 'Зв’язок', fields: [
     { k: 'contact', l: 'Як зв’язатися з точкою', pl: 'Зв’язок з точкою', t: 'area', max: 300, req: true,
-      ph: 'позивний, телефон або месенджер, частота' },
+      ph: 'позивний, телефон або месенджер, частота', w: 3 },
     { k: 'net', l: 'Інтернет на точці', pl: 'Інтернет', t: 'seg', o: OPT.net, req: true },
     { k: 'net_note', l: 'Тип підключення', pl: 'Тип підключення', max: 100, req: true,
       showIf: ['net', ['Є, стабільний', 'Є, нестабільний']], ph: 'наприклад: мобільний інтернет, Starlink' },
@@ -271,24 +273,24 @@ const POINT_GROUPS = [
   { id: 'supply', title: 'Медичне майно', fields: [
     { k: 'supplied', l: 'Забезпеченість медичним майном', pl: 'Забезпеченість майном', t: 'seg', o: OPT.supply, req: true },
     { k: 'supplied_note', l: 'Чого бракує і скільки потрібно', pl: 'Чого бракує, скільки', t: 'area', max: 400, req: true,
-      showIf: ['supplied', ['Часткова', 'Немає']], ph: 'наприклад: турнікети — 10 шт.' },
+      showIf: ['supplied', ['Часткова', 'Немає']], ph: 'наприклад: турнікети — 10 шт.', w: 3 },
   ] },
   { id: 'nrk', title: 'НРК — наземний роботизований комплекс', fields: [
-    { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true },
-    { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: модель, стан' },
+    { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true, w: 2 },
+    { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']], w: 2 },
+    { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: модель, стан', w: 2 },
+    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
+    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
+    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
   ] },
   { id: 'hypo', title: 'Засоби проти гіпотермії', fields: [
-    { k: 'hypo_heat', l: 'Хімічні грілки', pl: 'Хімічні грілки', t: 'seg', o: OPT.have, req: true },
-    { k: 'hypo_bag', l: 'Спальники', pl: 'Спальники', t: 'seg', o: OPT.have, req: true },
-    { k: 'hypo_ready', l: 'Ковдри, що самонагріваються (Ready-Heat)', pl: 'Ready-Heat', t: 'seg', o: OPT.have, req: true },
-    { k: 'hypo_note', l: 'Кількість, уточнення', pl: 'Уточнення', max: 200, ph: 'наприклад: грілки — 20 шт.' },
+    { k: 'hypo_heat', l: 'Хімічні грілки', pl: 'Хімічні грілки', t: 'seg', o: OPT.have, req: true, w: 2 },
+    { k: 'hypo_bag', l: 'Спальники', pl: 'Спальники', t: 'seg', o: OPT.have, req: true, w: 2 },
+    { k: 'hypo_ready', l: 'Ковдри, що самонагріваються (Ready-Heat)', pl: 'Ready-Heat', t: 'seg', o: OPT.have, req: true, w: 2 },
+    { k: 'hypo_note', l: 'Кількість, уточнення', pl: 'Уточнення', max: 200, ph: 'наприклад: грілки — 20 шт.', w: 6 },
   ] },
   { id: 'ppe', title: 'Засоби хімзахисту', fields: [
-    { k: 'ppe', l: 'Засоби хімзахисту на точці', pl: 'Хімзахист', t: 'seg', o: OPT.havePart, req: true },
+    { k: 'ppe', l: 'Засоби хімзахисту на точці', pl: 'Хімзахист', t: 'seg', o: OPT.havePart, req: true, w: 3 },
     { k: 'ppe_note', l: 'Що саме є та чого бракує', pl: 'Уточнення', max: 300, req: is('ppe', 'Частково'),
       showIf: ['ppe', ['Є', 'Частково']], ph: 'наприклад: протигази — 4 шт., костюми — немає' },
   ] },
@@ -301,7 +303,7 @@ const POINT_FIELDS = POINT_GROUPS.flatMap(g => g.fields);
 
 const POSITION_FIELDS = [
   { k: 'name', l: 'Назва або позивний позиції', pl: 'Назва / позивний', v: 'name', max: 60, req: true },
-  { k: 'coords', l: 'Приблизні координати позиції (MGRS)', pl: 'Координати', v: 'coords', req: true },
+  { k: 'coords', l: 'Координати позиції (MGRS)', pl: 'Координати', v: 'coords', req: true },
   { k: 'weight', l: 'Максимальна вага скиду, кг', pl: 'Вага скиду, кг', v: 'kg', req: true },
   { k: 'flight', l: 'Час підльоту до позиції переднього краю, хв', pl: 'Час підльоту, хв', v: 'min', req: true },
 ];
@@ -318,25 +320,29 @@ const roleSection = r => ({
 // ---- Розділи даних ----
 const SECTIONS = [
   { id: 'general', title: 'Загальні дані', fields: [
-    { k: 'unit', l: 'Підрозділ', pl: 'Підрозділ', t: 'sel', v: 'unit', req: true,
+    { k: 'unit', l: 'Підрозділ', pl: 'Підрозділ', t: 'sel', v: 'unit', req: true, w: 6,
       o: UNIT_CODES, ol: UNITS.map(([code, name]) => `${code} — ${name}`) },
     { k: 'date', l: 'Дата актуальності даних', pl: 'Дата', t: 'date', req: true },
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
-  ...ROLES.map(roleSection),
+  // порядок розділів = порядок у списку пропусків; медпункт: розташування → черговий → начальник
+  ...ROLES.filter(r => r.role !== 'mp').map(roleSection),
   { id: 'mploc', title: 'Розташування медпункту', pt: 'Медичний пункт', fields: [
     { k: 'mp_coords', l: 'Координати медпункту (MGRS)', pl: 'Координати', v: 'coords', req: true },
   ] },
+  roleSection(ROLES.find(r => r.role === 'mp')),
   { id: 'mphead', title: 'Начальник медпункту', pt: 'Начальник медпункту',
     hint: 'Тут потрібні контакти самого начальника — для прямого зв’язку з ним.',
     fields: [
-      { k: 'mphead_callsign', l: 'Позивний начальника', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
+      { k: 'mphead_callsign', l: 'Позивний начальника', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар', w: 6 },
       ...HEAD_CONTACTS,
     ] },
   { id: 'points', title: 'Точки передачі поранених', pt: 'Точки передачі поранених',
     list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, keepOne: true,
       minMsg: 'Додайте хоча б одну точку',
       keepMsg: 'Має бути хоча б одна точка передачі. Можна очистити поля, але не видалити останню точку.',
+      // «Дублювати»: копіюються всі відповіді, крім того, що в кожної точки своє
+      dup: ['name', 'coords', 'contact'],
       groups: POINT_GROUPS, fields: POINT_FIELDS } },
   { id: 'drops', title: 'Позиції, з яких можуть здійснювати медичні скиди', pt: 'Позиції для медичних скидів',
     fields: [
@@ -348,17 +354,17 @@ const SECTIONS = [
       showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
   { id: 'algo', title: 'Як відбувається медичний скид', pt: 'Як відбувається медичний скид', showIf: dropsDone,
     fields: [
-      { k: 'algo_carry', l: 'Хто доставляє вантаж до місця скиду і куди саме', pl: 'Хто доставляє й куди', t: 'area', max: 500, req: true, showIf: dropsDone },
-      { k: 'algo_hand', l: 'Хто здійснює скид', pl: 'Хто здійснює скид', t: 'area', max: 500, req: true, showIf: dropsDone },
-      { k: 'algo_time', l: 'Орієнтовний час від запиту до скиду, хв', pl: 'Від запиту до скиду, хв', v: 'min', req: true, showIf: dropsDone },
-      { k: 'algo_note', l: 'Додатково', pl: 'Додатково', t: 'area', max: 500, showIf: dropsDone },
+      { k: 'algo_carry', l: 'Хто доставляє вантаж до місця скиду і куди саме', pl: 'Хто доставляє й куди', t: 'area', max: 500, req: true, showIf: dropsDone, w: 3 },
+      { k: 'algo_hand', l: 'Хто здійснює скид', pl: 'Хто здійснює скид', t: 'area', max: 500, req: true, showIf: dropsDone, w: 3 },
+      { k: 'algo_time', l: 'Орієнтовний час від запиту до скиду, хв', pl: 'Від запиту до скиду, хв', v: 'min', req: true, showIf: dropsDone, w: 3 },
+      { k: 'algo_note', l: 'Додатково', pl: 'Додатково', t: 'area', max: 500, showIf: dropsDone, w: 3 },
     ] },
   { id: 'mphelp', title: 'Формування скидів медпунктом', pt: 'Формування скидів медпунктом', fields: [
-    { k: 'mp_help', l: 'Чи потрібна медпункту допомога у формуванні скидів', pl: 'Потрібна допомога', t: 'seg', o: OPT.yn, req: true },
-    { k: 'mp_help_note', l: 'Яка саме допомога потрібна', pl: 'Яка саме', t: 'area', max: 400, req: true, showIf: ['mp_help', ['Так']] },
+    { k: 'mp_help', l: 'Чи потрібна медпункту допомога у формуванні скидів', pl: 'Потрібна допомога', t: 'seg', o: OPT.yn, req: true, w: 3 },
+    { k: 'mp_help_note', l: 'Яка саме допомога потрібна', pl: 'Яка саме', t: 'area', max: 400, req: true, showIf: ['mp_help', ['Так']], w: 3 },
     { k: 'mp_std', l: 'Чи потрібні медпункту скиди встановленого зразка (наприклад, для пролонгованого догляду)', pl: 'Скиди встановленого зразка',
-      t: 'seg', o: OPT.yn, req: true },
-    { k: 'mp_std_qty', l: 'Які саме та скільки', pl: 'Які саме, скільки', t: 'area', max: 400, req: true, showIf: ['mp_std', ['Так']],
+      t: 'seg', o: OPT.yn, req: true, w: 3 },
+    { k: 'mp_std_qty', l: 'Які саме та скільки', pl: 'Які саме, скільки', t: 'area', max: 400, req: true, showIf: ['mp_std', ['Так']], w: 3,
       ph: 'наприклад: пролонгований догляд — 5 шт.' },
   ] },
 ];
@@ -374,7 +380,8 @@ const STEPS = [
   { id: 'general', title: 'Загальні дані', short: 'Загальне', sections: ['general'] },
   { id: 'kb', title: 'Черговий капітан бою', short: 'КБ', sections: ['kb'] },
   { id: 's4', title: 'Черговий S4', short: 'S4', sections: ['s4'] },
-  { id: 'med', title: 'Медичний пункт', short: 'Медпункт', sections: ['mploc', 'mp', 'mphead'] },
+  // pair — розділи, що на широкому екрані стоять поруч двома колонками
+  { id: 'med', title: 'Медичний пункт', short: 'Медпункт', sections: ['mploc', 'mp', 'mphead'], pair: ['mp', 'mphead'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
   { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo', 'mphelp'] },
   { id: 'check', title: 'Перевірка та звіт', short: 'Звіт', sections: [], final: true },

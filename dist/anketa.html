@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-r8q2M8pArUJ9qXeskchWVJ1DUF6RKAkDZPhqLxlcuI0='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-uTbjz+KUL5Jk2I5U+RnVhtvbJJ8NAGRCkvunhQyPL+U='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -38,7 +38,13 @@ b, strong { font-weight: 600; }
 .bar-act { display: flex; gap: 8px; flex: none; }
 .prog { height: 3px; background: var(--line-2); }
 .prog i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
-.steps { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 6px 12px; max-width: var(--max); margin: 0 auto; scroll-behavior: smooth; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 28px), transparent); }
+.steps { position: sticky; top: var(--bar-h, 62px); z-index: 9; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 6px max(12px, calc(50% - var(--max) / 2 + 4px)); scroll-behavior: smooth;
+  background: var(--paper); border-bottom: 1px solid var(--line);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 28px), transparent); }
+.stp .t-f, .steps-prog { display: none; }
+.stp em { font-style: normal; font-size: 11px; color: var(--warn); }
+.stp.unrev i { box-shadow: 0 0 0 2px var(--warn-2), 0 0 0 3px var(--warn); }
+@media (max-width: 1099px) { .stp em { display: none; } }
 .steps::-webkit-scrollbar { display: none; }
 .stp { flex: none; display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px 0 6px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2); cursor: pointer; font-size: 13px; scroll-snap-align: center; position: relative; }
 .stp i { font-style: normal; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--line-2); color: var(--ink-2); }
@@ -49,8 +55,8 @@ b, strong { font-weight: 600; }
 .stp b { font-size: 11px; background: var(--bad); color: #fff; border-radius: 999px; padding: 0 6px; line-height: 16px; }
 .stp b.todo { background: var(--line); color: var(--ink-2); }
 .stp.todo i { background: var(--warn-2); color: var(--warn); }
-/* поки кроки не винесено вбік (пакет 2): на широкому екрані смужка переноситься, а не обрізається */
-@media (min-width: 760px) { .steps { flex-wrap: wrap; overflow: visible; -webkit-mask-image: none; mask-image: none; } }
+/* середня ширина: смужка переноситься, а не обрізається */
+@media (min-width: 760px) and (max-width: 1099px) { .steps { flex-wrap: wrap; overflow: visible; -webkit-mask-image: none; mask-image: none; } }
 .stp:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ---- основна частина ---- */
@@ -66,8 +72,27 @@ b, strong { font-weight: 600; }
 .sec h3 { font: 600 18px/1.3 var(--head); }
 .note { font-weight: 600; color: var(--bad); }
 .hint { font-size: 13px; color: var(--mute); line-height: 1.4; }
-.fields { display: grid; gap: 16px; }
-.grp { display: grid; gap: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.fields, .grp-f { display: grid; gap: 16px; }
+.grp { display: grid; gap: 12px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.sec, .card-b { container-type: inline-size; }
+.fld { align-content: start; }
+@container (min-width: 600px) {
+  .fields, .grp-f { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 16px; }
+  .w2 { grid-column: span 2; } .w3 { grid-column: span 3; } .w6 { grid-column: 1 / -1; }
+  /* поля в одному ряду: підписи різної довжини — елементи керування все одно на одній лінії */
+  :is(.fields, .grp-f) > .fld:not(.group) { grid-template-rows: 1fr; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .lbl { align-self: end; }
+  .group .levels { grid-template-columns: 1fr 1fr; column-gap: 32px; }
+  /* у широкому розділі ширина варіанта — за текстом, щоб «Є, нестабільний» не переносився */
+  .seg-btn { flex: 1 1 auto; padding: 6px 8px; white-space: nowrap; }
+}
+/* широка картка: назва групи — ліва колонка, поля — праворуч (менше рядків-заголовків) */
+@container (min-width: 820px) {
+  .grp { grid-template-columns: 120px minmax(0, 1fr); column-gap: 20px; }
+  .card-b > .grp > h4 { padding-top: 2px; line-height: 1.35; text-transform: none; letter-spacing: 0; font-size: 14px; hyphens: auto; overflow-wrap: break-word; }
+}
+.pair { display: grid; gap: 16px; align-items: start; }
+@media (min-width: 1100px) { .pair { grid-template-columns: 1fr 1fr; } }
 .grp:first-child { padding-top: 0; border-top: 0; }
 .grp h4 { font: 600 13px/1.3 var(--font); color: var(--accent); text-transform: uppercase; letter-spacing: .06em; }
 
@@ -137,6 +162,9 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
 .badge.bad { background: var(--bad-2); color: var(--bad); }
 .badge.ok { background: var(--ok-2); color: var(--ok); }
 .badge.todo { background: var(--line-2); color: var(--ink-2); font-weight: 500; }
+.dup { color: var(--ink-2); }
+.dup:hover { color: var(--accent); background: var(--accent-2); }
+@media (max-width: 480px) { .del { padding: 0 10px; font-size: 12px; } .card-t { padding: 12px 10px; gap: 8px; } }
 .del { flex: none; border: 0; border-left: 1px solid var(--line-2); background: transparent; color: var(--mute); padding: 0 14px; cursor: pointer; font-size: 13px; }
 .del:hover { color: var(--bad); background: var(--bad-2); }
 .card-b { padding: 4px 14px 16px; display: grid; gap: 14px; border-top: 1px solid var(--line-2); }
@@ -158,8 +186,8 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
 
 /* ---- нижня навігація ---- */
 .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--paper); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
-.nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-@media (min-width: 800px) { .nav { padding-left: calc(50% - var(--max) / 2 + 16px); padding-right: calc(50% - var(--max) / 2 + 16px); } }
+.nav-in { display: flex; justify-content: space-between; align-items: center; gap: 12px; max-width: calc(var(--max) - 32px); margin: 0 auto; }
+.nav-sp { min-width: 120px; }
 .nav-mid { font-size: 13px; color: var(--mute); text-align: center; }
 @media (max-width: 420px) { .nav-mid .long { display: none; } }
 .navnote { position: absolute; left: 0; right: 0; bottom: 100%; margin: 0; padding: 10px 16px; background: var(--warn-2); color: var(--warn); border-top: 1px solid #f0d9a8; font-size: 14px; line-height: 1.4; text-align: center; }
@@ -199,17 +227,42 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
 .dl { display: grid; gap: 14px; padding-top: 6px; border-top: 1px solid var(--line-2); }
 .rule { background: var(--bad); color: #fff; padding: 12px 14px; border-radius: var(--r-s); font-size: 14px; line-height: 1.4; }
 .draftrow { display: grid; gap: 8px; padding-top: 6px; }
+.review { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 16px; background: var(--paper); }
+.review summary { cursor: pointer; font-weight: 600; }
+.review[open] summary { margin-bottom: 12px; }
+.rv-head { display: grid; gap: 8px; padding: 10px 12px; margin-bottom: 12px; background: var(--accent-2); border-radius: var(--r-s); font-size: 14px; }
+.rv-step { padding: 12px 0; border-top: 1px solid var(--line-2); display: grid; gap: 8px; }
+.rv-step h4 { font: 600 15px/1.3 var(--head); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rv-step h5 { font: 600 13px/1.3 var(--font); color: var(--accent); margin-top: 6px; display: flex; gap: 8px; align-items: center; }
+.rv { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rv th { width: 38%; text-align: left; font-weight: 400; color: var(--mute); padding: 4px 12px 4px 0; vertical-align: top; }
+.rv td { padding: 4px 0; font-weight: 600; white-space: pre-line; overflow-wrap: anywhere; }
+.rv tr + tr :is(th, td) { border-top: 1px solid var(--line-2); }
+.rv tr.chg :is(th, td) { background: var(--warn-2); }
+.rv tr.chg th { color: var(--warn); padding-left: 6px; }
+.rv .was { display: block; font-weight: 400; color: var(--mute); text-decoration: line-through; text-decoration-color: rgba(0,0,0,.3); }
+.rv-gone { font-size: 14px; color: var(--bad); }
+.review.only :is(.rv-step, .rv-sec, .rv-item):not(.has-chg), .review.only tr:not(.chg) { display: none; }
 
 /* ---- сповіщення ---- */
 .toast { position: fixed; left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 20; max-width: 560px; margin: 0 auto; background: var(--ink); color: #fff; padding: 12px 16px; border-radius: var(--r-s); font-size: 14px; line-height: 1.4; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
 
 @media (min-width: 640px) {
-  .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .fields fieldset.group { grid-column: 1 / -1; }
-  .fields :is(.fld:has(textarea), .fld:has(.seg), .fld:has(select)) { grid-column: 1 / -1; }
-  .sec[data-section="kb"] .fields, .sec[data-section="s4"] .fields, .sec[data-section="mp"] .fields, .sec[data-section="mphead"] .fields, .sec[data-section="mploc"] .fields { grid-template-columns: 1fr; }
   .sum { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .h2 { font-size: 28px; }
+}
+@media (min-width: 1100px) {
+  .bar-in { max-width: 1232px; }
+  .shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 32px; max-width: 1232px; margin: 0 auto; padding: 0 16px; align-items: start; }
+  .main { max-width: none; margin: 0; padding: 20px 0 24px; }
+  .steps { top: calc(var(--bar-h, 62px) + 4px); flex-direction: column; align-items: stretch; flex-wrap: nowrap; overflow: visible; padding: 20px 0; margin: 0;
+    gap: 2px; background: transparent; border: 0; -webkit-mask-image: none; mask-image: none; }
+  .stp { height: auto; min-height: 40px; padding: 8px 10px; border-radius: var(--r-s); text-align: left; }
+  .stp:hover:not(.cur) { background: var(--paper); }
+  .stp .t-s { display: none; } .stp .t-f { display: block; flex: 1; line-height: 1.3; }
+  .stp em { flex: none; }
+  .steps-prog { display: block; margin: 12px 10px 0; font-size: 13px; color: var(--mute); }
+  .nav-in { max-width: 1200px; padding-left: 264px; }
 }
 @media print { .bar, .nav, .toast { display: none; } body { background: #fff; padding: 0; } }
 
@@ -235,7 +288,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-8df5499";
+const BUILD_VERSION = "v2-37b795a";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -306,6 +359,8 @@ const iconSvg = (name, color = 'currentColor') =>
 //   ph       плейсхолдер
 //   hint     підказка під полем
 //   el       підпис у списку помилок, якщо l без контексту картки неоднозначний (за замовчуванням = l)
+//   w        ширина поля на широкому екрані в шостих частках рядка: 2 (третина), 3 (половина), 6 (весь рядок);
+//            без w — за типом поля (див. spanOf у src/form/app.mjs)
 
 const SCHEMA_VERSION = 5;
 const NONE = 'Немає';
@@ -369,7 +424,7 @@ const LEVELS = [
 
 // Контакти чергового (поля однакові для всіх трьох ролей; у даних ключ = роль + '_' + k)
 const CONTACT = [
-  { k: 'callsign', l: 'Позивний чергового', pl: 'Позивний', v: 'callsign', max: 30, req: true, ph: 'наприклад: Сокіл' },
+  { k: 'callsign', l: 'Позивний чергового', pl: 'Позивний', v: 'callsign', max: 30, req: true, ph: 'наприклад: Сокіл', w: 6 },
   { k: 'phone', l: 'WhatsApp', icon: 'whatsapp', v: 'phone', none: true, req: true },
   { k: 'signal', l: 'Signal', icon: 'signal', v: 'signal', none: true, req: true },
   { k: 'element', l: 'Element', icon: 'element', v: 'element', none: true, req: true },
@@ -400,7 +455,7 @@ const POINT_GROUPS = [
   ] },
   { id: 'link', title: 'Зв’язок', fields: [
     { k: 'contact', l: 'Як зв’язатися з точкою', pl: 'Зв’язок з точкою', t: 'area', max: 300, req: true,
-      ph: 'позивний, телефон або месенджер, частота' },
+      ph: 'позивний, телефон або месенджер, частота', w: 3 },
     { k: 'net', l: 'Інтернет на точці', pl: 'Інтернет', t: 'seg', o: OPT.net, req: true },
     { k: 'net_note', l: 'Тип підключення', pl: 'Тип підключення', max: 100, req: true,
       showIf: ['net', ['Є, стабільний', 'Є, нестабільний']], ph: 'наприклад: мобільний інтернет, Starlink' },
@@ -408,24 +463,24 @@ const POINT_GROUPS = [
   { id: 'supply', title: 'Медичне майно', fields: [
     { k: 'supplied', l: 'Забезпеченість медичним майном', pl: 'Забезпеченість майном', t: 'seg', o: OPT.supply, req: true },
     { k: 'supplied_note', l: 'Чого бракує і скільки потрібно', pl: 'Чого бракує, скільки', t: 'area', max: 400, req: true,
-      showIf: ['supplied', ['Часткова', 'Немає']], ph: 'наприклад: турнікети — 10 шт.' },
+      showIf: ['supplied', ['Часткова', 'Немає']], ph: 'наприклад: турнікети — 10 шт.', w: 3 },
   ] },
   { id: 'nrk', title: 'НРК — наземний роботизований комплекс', fields: [
-    { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true },
-    { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']] },
-    { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: модель, стан' },
+    { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true, w: 2 },
+    { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']], w: 2 },
+    { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: модель, стан', w: 2 },
+    { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
+    { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
+    { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
   ] },
   { id: 'hypo', title: 'Засоби проти гіпотермії', fields: [
-    { k: 'hypo_heat', l: 'Хімічні грілки', pl: 'Хімічні грілки', t: 'seg', o: OPT.have, req: true },
-    { k: 'hypo_bag', l: 'Спальники', pl: 'Спальники', t: 'seg', o: OPT.have, req: true },
-    { k: 'hypo_ready', l: 'Ковдри, що самонагріваються (Ready-Heat)', pl: 'Ready-Heat', t: 'seg', o: OPT.have, req: true },
-    { k: 'hypo_note', l: 'Кількість, уточнення', pl: 'Уточнення', max: 200, ph: 'наприклад: грілки — 20 шт.' },
+    { k: 'hypo_heat', l: 'Хімічні грілки', pl: 'Хімічні грілки', t: 'seg', o: OPT.have, req: true, w: 2 },
+    { k: 'hypo_bag', l: 'Спальники', pl: 'Спальники', t: 'seg', o: OPT.have, req: true, w: 2 },
+    { k: 'hypo_ready', l: 'Ковдри, що самонагріваються (Ready-Heat)', pl: 'Ready-Heat', t: 'seg', o: OPT.have, req: true, w: 2 },
+    { k: 'hypo_note', l: 'Кількість, уточнення', pl: 'Уточнення', max: 200, ph: 'наприклад: грілки — 20 шт.', w: 6 },
   ] },
   { id: 'ppe', title: 'Засоби хімзахисту', fields: [
-    { k: 'ppe', l: 'Засоби хімзахисту на точці', pl: 'Хімзахист', t: 'seg', o: OPT.havePart, req: true },
+    { k: 'ppe', l: 'Засоби хімзахисту на точці', pl: 'Хімзахист', t: 'seg', o: OPT.havePart, req: true, w: 3 },
     { k: 'ppe_note', l: 'Що саме є та чого бракує', pl: 'Уточнення', max: 300, req: is('ppe', 'Частково'),
       showIf: ['ppe', ['Є', 'Частково']], ph: 'наприклад: протигази — 4 шт., костюми — немає' },
   ] },
@@ -438,7 +493,7 @@ const POINT_FIELDS = POINT_GROUPS.flatMap(g => g.fields);
 
 const POSITION_FIELDS = [
   { k: 'name', l: 'Назва або позивний позиції', pl: 'Назва / позивний', v: 'name', max: 60, req: true },
-  { k: 'coords', l: 'Приблизні координати позиції (MGRS)', pl: 'Координати', v: 'coords', req: true },
+  { k: 'coords', l: 'Координати позиції (MGRS)', pl: 'Координати', v: 'coords', req: true },
   { k: 'weight', l: 'Максимальна вага скиду, кг', pl: 'Вага скиду, кг', v: 'kg', req: true },
   { k: 'flight', l: 'Час підльоту до позиції переднього краю, хв', pl: 'Час підльоту, хв', v: 'min', req: true },
 ];
@@ -455,25 +510,29 @@ const roleSection = r => ({
 // ---- Розділи даних ----
 const SECTIONS = [
   { id: 'general', title: 'Загальні дані', fields: [
-    { k: 'unit', l: 'Підрозділ', pl: 'Підрозділ', t: 'sel', v: 'unit', req: true,
+    { k: 'unit', l: 'Підрозділ', pl: 'Підрозділ', t: 'sel', v: 'unit', req: true, w: 6,
       o: UNIT_CODES, ol: UNITS.map(([code, name]) => `${code} — ${name}`) },
     { k: 'date', l: 'Дата актуальності даних', pl: 'Дата', t: 'date', req: true },
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
-  ...ROLES.map(roleSection),
+  // порядок розділів = порядок у списку пропусків; медпункт: розташування → черговий → начальник
+  ...ROLES.filter(r => r.role !== 'mp').map(roleSection),
   { id: 'mploc', title: 'Розташування медпункту', pt: 'Медичний пункт', fields: [
     { k: 'mp_coords', l: 'Координати медпункту (MGRS)', pl: 'Координати', v: 'coords', req: true },
   ] },
+  roleSection(ROLES.find(r => r.role === 'mp')),
   { id: 'mphead', title: 'Начальник медпункту', pt: 'Начальник медпункту',
     hint: 'Тут потрібні контакти самого начальника — для прямого зв’язку з ним.',
     fields: [
-      { k: 'mphead_callsign', l: 'Позивний начальника', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
+      { k: 'mphead_callsign', l: 'Позивний начальника', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар', w: 6 },
       ...HEAD_CONTACTS,
     ] },
   { id: 'points', title: 'Точки передачі поранених', pt: 'Точки передачі поранених',
     list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, keepOne: true,
       minMsg: 'Додайте хоча б одну точку',
       keepMsg: 'Має бути хоча б одна точка передачі. Можна очистити поля, але не видалити останню точку.',
+      // «Дублювати»: копіюються всі відповіді, крім того, що в кожної точки своє
+      dup: ['name', 'coords', 'contact'],
       groups: POINT_GROUPS, fields: POINT_FIELDS } },
   { id: 'drops', title: 'Позиції, з яких можуть здійснювати медичні скиди', pt: 'Позиції для медичних скидів',
     fields: [
@@ -485,17 +544,17 @@ const SECTIONS = [
       showIf: ['drops', ['Так']], fields: POSITION_FIELDS } },
   { id: 'algo', title: 'Як відбувається медичний скид', pt: 'Як відбувається медичний скид', showIf: dropsDone,
     fields: [
-      { k: 'algo_carry', l: 'Хто доставляє вантаж до місця скиду і куди саме', pl: 'Хто доставляє й куди', t: 'area', max: 500, req: true, showIf: dropsDone },
-      { k: 'algo_hand', l: 'Хто здійснює скид', pl: 'Хто здійснює скид', t: 'area', max: 500, req: true, showIf: dropsDone },
-      { k: 'algo_time', l: 'Орієнтовний час від запиту до скиду, хв', pl: 'Від запиту до скиду, хв', v: 'min', req: true, showIf: dropsDone },
-      { k: 'algo_note', l: 'Додатково', pl: 'Додатково', t: 'area', max: 500, showIf: dropsDone },
+      { k: 'algo_carry', l: 'Хто доставляє вантаж до місця скиду і куди саме', pl: 'Хто доставляє й куди', t: 'area', max: 500, req: true, showIf: dropsDone, w: 3 },
+      { k: 'algo_hand', l: 'Хто здійснює скид', pl: 'Хто здійснює скид', t: 'area', max: 500, req: true, showIf: dropsDone, w: 3 },
+      { k: 'algo_time', l: 'Орієнтовний час від запиту до скиду, хв', pl: 'Від запиту до скиду, хв', v: 'min', req: true, showIf: dropsDone, w: 3 },
+      { k: 'algo_note', l: 'Додатково', pl: 'Додатково', t: 'area', max: 500, showIf: dropsDone, w: 3 },
     ] },
   { id: 'mphelp', title: 'Формування скидів медпунктом', pt: 'Формування скидів медпунктом', fields: [
-    { k: 'mp_help', l: 'Чи потрібна медпункту допомога у формуванні скидів', pl: 'Потрібна допомога', t: 'seg', o: OPT.yn, req: true },
-    { k: 'mp_help_note', l: 'Яка саме допомога потрібна', pl: 'Яка саме', t: 'area', max: 400, req: true, showIf: ['mp_help', ['Так']] },
+    { k: 'mp_help', l: 'Чи потрібна медпункту допомога у формуванні скидів', pl: 'Потрібна допомога', t: 'seg', o: OPT.yn, req: true, w: 3 },
+    { k: 'mp_help_note', l: 'Яка саме допомога потрібна', pl: 'Яка саме', t: 'area', max: 400, req: true, showIf: ['mp_help', ['Так']], w: 3 },
     { k: 'mp_std', l: 'Чи потрібні медпункту скиди встановленого зразка (наприклад, для пролонгованого догляду)', pl: 'Скиди встановленого зразка',
-      t: 'seg', o: OPT.yn, req: true },
-    { k: 'mp_std_qty', l: 'Які саме та скільки', pl: 'Які саме, скільки', t: 'area', max: 400, req: true, showIf: ['mp_std', ['Так']],
+      t: 'seg', o: OPT.yn, req: true, w: 3 },
+    { k: 'mp_std_qty', l: 'Які саме та скільки', pl: 'Які саме, скільки', t: 'area', max: 400, req: true, showIf: ['mp_std', ['Так']], w: 3,
       ph: 'наприклад: пролонгований догляд — 5 шт.' },
   ] },
 ];
@@ -511,7 +570,8 @@ const STEPS = [
   { id: 'general', title: 'Загальні дані', short: 'Загальне', sections: ['general'] },
   { id: 'kb', title: 'Черговий капітан бою', short: 'КБ', sections: ['kb'] },
   { id: 's4', title: 'Черговий S4', short: 'S4', sections: ['s4'] },
-  { id: 'med', title: 'Медичний пункт', short: 'Медпункт', sections: ['mploc', 'mp', 'mphead'] },
+  // pair — розділи, що на широкому екрані стоять поруч двома колонками
+  { id: 'med', title: 'Медичний пункт', short: 'Медпункт', sections: ['mploc', 'mp', 'mphead'], pair: ['mp', 'mphead'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
   { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo', 'mphelp'] },
   { id: 'check', title: 'Перевірка та звіт', short: 'Звіт', sections: [], final: true },
@@ -1266,8 +1326,63 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
   };
 }
 
+// ---- src/shared/review.mjs ----
+// Огляд відповідей і порівняння з попереднім звітом (для кроку «Перевірка та звіт»). Чиста логіка без DOM.
+
+
+
+
+// Значення поля так, як його видно у звіті; приховане поле — порожнє
+const shownValue = (f, item) => item && visible(f, item) ? String(cellText(f, item) ?? '').trim() : '';
+const listOn = (l, d) => !!d && visible({ showIf: l.showIf }, d);
+const REVIEW_SKIP = new Set(['date']);          // дату актуальності оновлюють щоразу — це не «зміна даних»
+const itemTitle = (l, it, i) => `${l.item} ${i + 1}${hasText(it?.name) ? ` · ${it.name.trim()}` : ''}`;
+
+// Усі відповіді по кроках і розділах: [{ step, index, sections: [{ id, title, rows, items }] }]
+//   rows:  [{ path, label, value }];  items (для списків): [{ key, title, rows }]
+function reviewModel(d) {
+  return STEPS.map((step, index) => ({ step, index })).filter(x => !x.step.final).map(({ step, index }) => ({
+    step, index,
+    sections: step.sections.map(id => {
+      const s = sectionById(id);
+      if (s.showIf && !visible(s, d)) return null;
+      const rows = (s.fields || []).filter(f => visible(f, d)).map(f => ({ path: f.k, label: f.pl || f.l, value: shownValue(f, d) }));
+      const items = s.list && listOn(s.list, d) ? (d[s.list.key] || []).map((it, i) => ({
+        key: `${s.list.key}.${i}`, title: itemTitle(s.list, it, i),
+        rows: s.list.fields.filter(f => visible(f, it)).map(f => ({ path: `${s.list.key}.${i}.${f.k}`, label: f.pl || f.l, value: shownValue(f, it) })),
+      })) : [];
+      return rows.length || items.length ? { id, title: s.title, rows, items } : null;
+    }).filter(Boolean),
+  }));
+}
+
+// Що змінилося від base до cur.
+//   changes: Map(шлях → попереднє значення); added: ['points.2', …]; removed: [{ key, title }]; count — разом
+// Елементи списків порівнюються за номером. Поле, що стало прихованим, — зміна (було значення, стало порожньо).
+function diffAnswers(base, cur) {
+  const changes = new Map(), added = [], removed = [];
+  const cmp = (f, path, a, b) => {
+    if (REVIEW_SKIP.has(path)) return;
+    const was = shownValue(f, a), now = shownValue(f, b);
+    if (was !== now) changes.set(path, was);
+  };
+  for (const s of SECTIONS) {
+    for (const f of s.fields || []) cmp(f, f.k, base, cur);
+    if (!s.list) continue;
+    const k = s.list.key;
+    const A = listOn(s.list, base) ? base[k] || [] : [], B = listOn(s.list, cur) ? cur[k] || [] : [];
+    for (let i = 0; i < Math.max(A.length, B.length); i++) {
+      if (i >= A.length) added.push(`${k}.${i}`);
+      else if (i >= B.length) removed.push({ key: `${k}.${i}`, title: itemTitle(s.list, A[i], i) });
+      else for (const f of s.list.fields) cmp(f, `${k}.${i}.${f.k}`, A[i], B[i]);
+    }
+  }
+  return { changes, added, removed, count: changes.size + added.length + removed.length };
+}
+
 // ---- src/form/app.mjs ----
 // Анкета для підрозділів: покрокова форма з живою перевіркою, чернетками й звітом PDF.
+
 
 
 
@@ -1295,6 +1410,10 @@ let reopened = null;           // { date, kind } — з якого файла п
 let draftOk = true;            // чи працює сховище браузера
 let nextArmed = null;          // id кроку, на якому «Далі» вже натиснули попри пропуски (друге натискання переходить)
 let notices = [];              // повідомлення вгорі сторінки, що не зникають самі: { id, kind: 'info'|'warn'|'ok', text }
+let baseline = null;           // { date, data } — попередній звіт, з яким порівнюємо відповіді (лише для відкритого звіту)
+let unreviewed = new Set();    // кроки, які після відкриття попереднього звіту ще не переглянули
+let onlyChanged = false;       // огляд відповідей: показувати лише змінене
+const SAME_ACK = 'same';       // ключ підтвердження «дані не змінилися» в ack
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -1329,15 +1448,22 @@ const ackKey = w => WARN_ACK_PREFIX + w.path + '|' + w.msg;
 const stepErrors = id => errors().filter(p => p.step === id);
 const fieldProblems = path => problems().filter(p => p.path === path);
 const hasAnyData = () => Object.keys(data).some(k => !['v', 'date', ...LIST_KEYS].includes(k)) || LIST_KEYS.some(k => (data[k] || []).some(it => Object.keys(it).length));
-const canDownload = () => !errors().length && warnings().every(w => ack.has(ackKey(w)));
-const dlHintText = () => errors().length ? 'Кнопка стане активною, коли всі поля буде заповнено й помилки виправлено.' : 'Підтвердьте всі зауваження вище.';
+const diffNow = () => baseline ? diffAnswers(baseline.data, normalizeData(data)) : null;
+const needSameAck = () => { const d = diffNow(); return !!d && d.count === 0; };
+const canDownload = () => !errors().length && !unreviewed.size && warnings().every(w => ack.has(ackKey(w))) && (!needSameAck() || ack.has(SAME_ACK));
+const dlHintText = () => unreviewed.size ? 'Спершу перегляньте всі кроки.'
+  : errors().length ? 'Кнопка стане активною, коли всі поля буде заповнено й помилки виправлено.'
+  : needSameAck() && !ack.has(SAME_ACK) ? 'Підтвердьте, що дані не змінилися, або оновіть їх.' : 'Підтвердьте всі зауваження вище.';
 
 // ---------- рендер полів ----------
 const idOf = path => 'f_' + path.replace(/\W/g, '_');
 // Однорядкові поля не обрізаємо мовчки: дозволяємо ввести більше, а задовгий текст показуємо як помилку
 const inputMax = f => Math.max(maxLen(f) * 4, 60);
+// Ширина поля на широкому екрані (у шостих частках рядка): явна (f.w) або за типом
+const spanOf = f => f.w || (f.t === 'area' || f.t === 'group' || f.t === 'sel' ? 6
+  : f.t === 'seg' ? (f.o.length === 2 && f.l.length <= 30 ? 2 : f.l.length > 45 ? 6 : 3) : 3);
 function fieldHtml(f, path, item) {
-  const id = idOf(path);
+  const id = idOf(path), w = ` w${spanOf(f)}`;
   const hidden = !visible(f, item) ? ' hidden' : '';   // атрибут hidden, не клас
   const show = f.showIf ? ' data-cond' : '';
   const req = required(f, item, data);
@@ -1360,7 +1486,7 @@ function fieldHtml(f, path, item) {
         <p class="err" id="${iid}_err"></p></div>`;
     }).join('');
     const ok = `${path}_other`, oid = idOf(ok);
-    return `<fieldset class="fld group" data-field="${esc(path)}"><legend class="lbl">${esc(f.l)}${star}</legend>
+    return `<fieldset class="fld group${w}" data-field="${esc(path)}"><legend class="lbl">${esc(f.l)}${star}</legend>
       <p class="hint">${esc(f.tip || '')}</p>
       <div class="levels">${rows}</div>
       <label class="lbl" for="${oid}">Інше або уточнення</label>
@@ -1371,12 +1497,12 @@ function fieldHtml(f, path, item) {
     // радіогрупа: одна зупинка Tab на питання (обраний варіант, або перший), вибір стрілками
     const cur = f.o.includes(v) ? v : f.o[0];
     const opts = f.o.map(o => `<button type="button" role="radio" aria-checked="${v === o}" tabindex="${o === cur ? 0 : -1}" class="seg-btn${v === o ? ' on' : ''}" data-val="${esc(o)}">${esc(o)}</button>`).join('');
-    return `<div class="fld" data-field="${esc(path)}"${show}${hidden}><span class="lbl" id="${id}_l">${esc(f.l)}${star}</span>${hint}
+    return `<div class="fld${w}" data-field="${esc(path)}"${show}${hidden}><span class="lbl" id="${id}_l">${esc(f.l)}${star}</span>${hint}
       <div class="seg" role="radiogroup" aria-labelledby="${id}_l" aria-describedby="${id}_err" data-path="${esc(path)}" id="${id}">${opts}</div>${err}</div>`;
   }
   if (f.none) {
     const none = v === NONE;
-    return `<div class="fld" data-field="${esc(path)}"${hidden}>
+    return `<div class="fld${w}" data-field="${esc(path)}"${hidden}>
       <label class="lbl" for="${id}">${f.icon ? `<i class="ico" aria-hidden="true">${iconSvg(f.icon)}</i>` : ''}${esc(f.l)}${star}</label>${hint}
       <div class="withnone">
         <input id="${id}" type="text" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" maxlength="${inputMax(f)}" placeholder="${esc(ph)}" value="${none ? '' : esc(v)}"${none ? ' disabled' : ''}${im}${textAttrs.replace(/ autocapitalize="[^"]*"/, '')} autocapitalize="off">
@@ -1390,7 +1516,7 @@ function fieldHtml(f, path, item) {
       ${f.o.map((o, i) => `<option value="${esc(o)}"${v === o ? ' selected' : ''}>${esc(f.ol?.[i] ?? o)}</option>`).join('')}</select>`;
   else if (f.t === 'date') ctl = `<input id="${id}" type="date" data-path="${esc(path)}" value="${esc(v)}" max="${todayISO()}" aria-describedby="${id}_err">`;
   else ctl = `<input id="${id}" type="text" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" maxlength="${inputMax(f)}" placeholder="${esc(ph)}" value="${esc(v)}"${im}${textAttrs}>`;
-  return `<div class="fld" data-field="${esc(path)}"${show}${hidden}>${label}${hint}${ctl}${err}</div>`;
+  return `<div class="fld${w}" data-field="${esc(path)}"${show}${hidden}>${label}${hint}${ctl}${err}</div>`;
 }
 
 // Стан картки: червоне — помилки введення; сіре — лишилося заповнити; зелене — усе гаразд
@@ -1398,7 +1524,7 @@ const cardStatus = (listKey, i) => {
   const mine = errors().filter(p => p.path.startsWith(`${listKey}.${i}.`));
   const bad = invalidOf(mine).length, todo = missingOf(mine).length;
   if (bad) return `<span class="badge bad">${bad} ${plural(bad, 'помилка', 'помилки', 'помилок')}</span>`;
-  if (todo) return `<span class="badge todo">лишилося заповнити: ${todo}</span>`;
+  if (todo) return `<span class="badge todo" title="Лишилося заповнити полів: ${todo}">ще ${todo}</span>`;
   return '<span class="badge ok">✓ заповнено</span>';
 };
 
@@ -1407,7 +1533,7 @@ function cardHtml(listKey, i) {
   const title = hasText(item.name) ? item.name.trim() : '';
   const sub = hasText(item.coords) ? item.coords : '';
   const body = def.groups
-    ? def.groups.map(g => `<div class="grp"><h4>${esc(g.title)}</h4>${g.fields.map(f => fieldHtml(f, `${listKey}.${i}.${f.k}`, item)).join('')}</div>`).join('')
+    ? def.groups.map(g => `<div class="grp"><h4>${esc(g.title)}</h4><div class="grp-f">${g.fields.map(f => fieldHtml(f, `${listKey}.${i}.${f.k}`, item)).join('')}</div></div>`).join('')
     : def.fields.map(f => fieldHtml(f, `${listKey}.${i}.${f.k}`, item)).join('');
   const canDelete = !(def.keepOne && data[listKey].length <= 1);
   return `<article class="card${open ? ' open' : ''}" data-card="${listKey}" data-idx="${i}">
@@ -1418,6 +1544,7 @@ function cardHtml(listKey, i) {
         ${cardStatus(listKey, i)}
         <span class="chev" aria-hidden="true"></span>
       </button>
+      ${def.dup ? `<button type="button" class="del dup" data-dup="${listKey}:${i}" aria-label="Дублювати ${esc(def.addText)} ${i + 1}">Дублювати</button>` : ''}
       ${canDelete ? `<button type="button" class="del" data-del="${listKey}:${i}" aria-label="Видалити ${esc(def.addText)} ${i + 1}">Видалити</button>` : ''}
     </header>
     <div class="card-b"${open ? '' : ' hidden'}>${body}</div>
@@ -1464,6 +1591,9 @@ function checkHtml() {
       <div><span>Позицій для скидів</span><b>${data.drops === 'Так' ? pos : data.drops === 'Ні' ? 'немає' : '—'}</b></div>
       <div><span>Заповнено обов’язкових</span><b>${pr.done} з ${pr.total}</b></div>
     </div>
+    ${unreviewed.size ? `<div class="box warn"><h3>Не переглянуто кроків: ${unreviewed.size}</h3>
+      <p>Дані підставлено з попереднього звіту. Відкрийте кожен крок і перевірте, чи нічого не змінилося.</p>
+      <ul>${STEPS.map((s, i) => unreviewed.has(s.id) ? `<li><button type="button" class="link" data-step="${i}">${esc(s.title)}</button></li>` : '').join('')}</ul></div>` : ''}
     ${staleDate ? `<div class="box warn"><h3>Дата актуальності — з попереднього файла</h3>
       <p>Дані підставлено з ${reopened.kind === 'draft' ? 'чернетки' : 'звіту'} від ${esc(fmtDate(reopened.date))}. Якщо ви перевірили й оновили дані сьогодні — поставте сьогоднішню дату.</p>
       <button type="button" class="btn" id="today">Поставити сьогоднішню дату (${esc(fmtDate(todayISO()))})</button></div>` : ''}
@@ -1476,6 +1606,8 @@ function checkHtml() {
       <p>Це не помилки, але підтвердіть, що дані правильні, або виправте їх.</p>
       <ul>${warns.map(w => `<li><label class="ackl"><input type="checkbox" data-ack="${esc(ackKey(w))}"${ack.has(ackKey(w)) ? ' checked' : ''}> <span>${esc(itemPrefix(w))}${esc(w.label)}: ${esc(w.msg)}</span></label> <button type="button" class="link small" data-goto="${esc(w.path)}">до поля</button></li>`).join('')}</ul>
     </div>` : ''}
+    ${sameBoxHtml()}
+    ${reviewHtml()}
     <div class="dl">
       <button type="button" class="btn primary big" id="report"${can ? '' : ' disabled'}>Завантажити звіт PDF</button>
       <p class="hint" id="dlhint"${can ? ' hidden' : ''}>${esc(dlHintText())}</p>
@@ -1486,14 +1618,51 @@ function checkHtml() {
   </section>`;
 }
 
+// Огляд усіх відповідей; якщо дані підставлено з попереднього звіту — зі змінами відносно нього
+function reviewHtml() {
+  const d = normalizeData(data), diff = diffNow();
+  const chg = path => !!diff && diff.changes.has(path), was = path => diff?.changes.get(path);
+  const row = r => `<tr${chg(r.path) ? ' class="chg"' : ''}><th>${esc(r.label)}</th><td>${hasText(r.value) ? esc(r.value) : '—'}${chg(r.path) ? `<small class="was">було: ${hasText(was(r.path)) ? esc(was(r.path)) : '—'}</small>` : ''}</td></tr>`;
+  const steps = reviewModel(d).map(({ step: st, index, sections }) => {
+    const multi = sections.length > 1;
+    let stepChg = false;
+    const body = sections.map(sec => {
+      let secChg = sec.rows.some(r => chg(r.path));
+      const items = sec.items.map(it => {
+        const isNew = !!diff && diff.added.includes(it.key), itChg = isNew || it.rows.some(r => chg(r.path));
+        if (itChg) secChg = true;
+        return `<div class="rv-item${itChg ? ' has-chg' : ''}"><h5>${esc(it.title)}${isNew ? ' <span class="badge ok">нова</span>' : ''}</h5><table class="rv">${it.rows.map(row).join('')}</table></div>`;
+      }).join('');
+      const listKey = sectionById(sec.id).list?.key;
+      const gone = listKey && diff ? diff.removed.filter(x => x.key.startsWith(listKey + '.')) : [];
+      if (gone.length) secChg = true;
+      if (secChg) stepChg = true;
+      return `<div class="rv-sec${secChg ? ' has-chg' : ''}">${multi ? `<h5 class="rv-st">${esc(sec.title)}</h5>` : ''}
+        ${sec.rows.length ? `<table class="rv">${sec.rows.map(row).join('')}</table>` : ''}${items}
+        ${gone.map(x => `<p class="rv-gone">${esc(x.title)} — видалено</p>`).join('')}</div>`;
+    }).join('');
+    return `<div class="rv-step${stepChg ? ' has-chg' : ''}"><h4>${esc(st.title)} <button type="button" class="link small" data-step="${index}">Змінити</button></h4>${body}</div>`;
+  }).join('');
+  const head = diff ? `<div class="rv-head"><p>${diff.count ? `Порівняно зі звітом від ${esc(fmtDate(baseline.date))} змінено ${diff.count} ${plural(diff.count, 'відповідь', 'відповіді', 'відповідей')}. Змінене виділено.` : `Відносно звіту від ${esc(fmtDate(baseline.date))} нічого не змінено.`}</p>
+    ${diff.count ? `<label class="ackl"><input type="checkbox" id="onlychg"${onlyChanged ? ' checked' : ''}> <span>Показати лише змінене</span></label>` : ''}</div>` : '';
+  return `<details class="review${onlyChanged && diff?.count ? ' only' : ''}" id="review"${diff?.count ? ' open' : ''}><summary>Переглянути всі відповіді</summary>${head}${steps}</details>`;
+}
+// Дані відкритого звіту не змінено — треба явно підтвердити, що вони досі актуальні
+function sameBoxHtml() {
+  if (!needSameAck()) return '';
+  return `<div class="box warn"><h3>Дані не змінилися</h3>
+    <label class="ackl"><input type="checkbox" data-ack="${SAME_ACK}"${ack.has(SAME_ACK) ? ' checked' : ''}> <span>Дані не змінилися з ${esc(fmtDate(baseline.date))} — підтверджую, що вони актуальні</span></label></div>`;
+}
+
 // ---------- каркас ----------
 // Стан кроку в навігації: червоне — помилки введення (завжди); сіре — незаповнене (після спроби пройти крок)
 function stepState(s, i) {
   if (s.final) return { cls: i === step ? 'cur' : '', badge: '' };
   const mine = errors().filter(p => p.step === s.id);
   const bad = invalidOf(mine).length, todo = attempted.has(s.id) ? missingOf(mine).length : 0;
-  const cls = i === step ? 'cur' : bad ? 'bad' : todo ? 'todo' : attempted.has(s.id) ? 'ok' : '';
-  const badge = bad ? `<b class="bad" title="Помилок: ${bad}">${bad}</b>` : todo ? `<b class="todo" title="Не заповнено: ${todo}">${todo}</b>` : '';
+  const cls = (i === step ? 'cur' : bad ? 'bad' : todo ? 'todo' : attempted.has(s.id) ? 'ok' : '') + (unreviewed.has(s.id) ? ' unrev' : '');
+  const badge = (unreviewed.has(s.id) ? '<em title="Крок ще не переглянуто після відкриття попереднього звіту">не переглянуто</em>' : '')
+    + (bad ? `<b class="bad" title="Помилок: ${bad}">${bad}</b>` : todo ? `<b class="todo" title="Не заповнено: ${todo}">${todo}</b>` : '');
   return { cls, badge };
 }
 const progressHtml = pr => `<span class="long">Заповнено </span>${pr.done} з ${pr.total}`;
@@ -1517,7 +1686,7 @@ function render({ keepScroll = false } = {}) {
   const pr = progressOf(normalizeData(data));
   const stepsNav = STEPS.map((s, i) => {
     const { cls, badge } = stepState(s, i);
-    return `<button type="button" class="stp ${cls}" data-step="${i}" aria-current="${i === step ? 'step' : 'false'}"><i>${s.final ? '✓' : i + 1}</i><span>${esc(s.short)}</span>${badge}</button>`;
+    return `<button type="button" class="stp ${cls}" data-step="${i}" aria-current="${i === step ? 'step' : 'false'}"><i>${s.final ? '✓' : i + 1}</i><span class="t-s">${esc(s.short)}</span><span class="t-f">${esc(s.title)}</span>${badge}</button>`;
   }).join('');
   const armed = nextArmed === st.id;
   app.innerHTML = `
@@ -1530,26 +1699,43 @@ function render({ keepScroll = false } = {}) {
       </div>
     </div>
     <div class="prog" aria-label="Прогрес"><i style="width:${pr.total ? Math.round(100 * pr.done / pr.total) : 0}%"></i></div>
-    <nav class="steps" aria-label="Кроки">${stepsNav}</nav>
   </header>
-  <main class="main">
-    <div id="notices" class="notices">${noticesHtml()}</div>
-    ${step === 0 ? introHtml() : ''}
-    <h2 class="h2" tabindex="-1"><small>Крок ${step + 1} з ${STEPS.length}</small>${esc(st.title)}</h2>
-    ${st.final ? checkHtml() : st.sections.map(id => sectionHtml(sectionById(id))).join('')}
-  </main>
+  <div class="shell">
+    <nav class="steps" aria-label="Кроки">${stepsNav}<p class="steps-prog">${progressHtml(pr)}</p></nav>
+    <main class="main">
+      <div id="notices" class="notices">${noticesHtml()}</div>
+      ${step === 0 ? introHtml() : ''}
+      <h2 class="h2" tabindex="-1"><small>Крок ${step + 1} з ${STEPS.length}</small>${esc(st.title)}</h2>
+      ${st.final ? checkHtml() : sectionsHtml(st)}
+    </main>
+  </div>
   <footer class="nav">
     <p class="navnote" id="navnote"${armed ? '' : ' hidden'}>${armed ? esc(armedText(st.id)) : ''}</p>
-    <button type="button" class="btn" id="prev"${step === 0 ? ' disabled' : ''}>← Назад</button>
-    <span class="nav-mid">${progressHtml(pr)}</span>
-    ${st.final ? '' : `<button type="button" class="btn primary" id="next">${nextLabel(armed)}</button>`}
+    <div class="nav-in">
+      <button type="button" class="btn" id="prev"${step === 0 ? ' disabled' : ''}>← Назад</button>
+      <span class="nav-mid">${progressHtml(pr)}</span>
+      ${st.final ? '<span class="nav-sp"></span>' : `<button type="button" class="btn primary" id="next">${nextLabel(armed)}</button>`}
+    </div>
   </footer>`;
+  // висота шапки — для липкої смужки кроків під нею
+  document.documentElement.style.setProperty('--bar-h', `${$('.bar', app).offsetHeight}px`);
   $$('textarea', app).forEach(counter);
   refreshErrors();
   // поточний крок — у видимій частині смужки кроків
   const nav = $('.steps', app), cur = $('.stp.cur', app);
   if (nav && cur) nav.scrollLeft = Math.max(0, cur.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2);
   if (keepScroll) window.scrollTo({ top: y }); else window.scrollTo({ top: 0 });
+}
+// Розділи кроку; ті, що в st.pair, на широкому екрані стоять поруч двома колонками
+function sectionsHtml(st) {
+  const pair = st.pair || [];
+  if (!pair.length) return st.sections.map(id => sectionHtml(sectionById(id))).join('');
+  const at = st.sections.indexOf(pair[0]);
+  const before = st.sections.filter((id, i) => i < at && !pair.includes(id));
+  const after = st.sections.filter((id, i) => i > at && !pair.includes(id));
+  return [...before.map(id => sectionHtml(sectionById(id))),
+    `<div class="pair">${pair.map(id => sectionHtml(sectionById(id))).join('')}</div>`,
+    ...after.map(id => sectionHtml(sectionById(id)))].join('');
 }
 const nextLabel = armed => (step === STEPS.length - 2 ? 'До перевірки' : 'Далі') + (armed ? ' попри пропуски →' : ' →');
 function armedText(id) {
@@ -1564,6 +1750,7 @@ function introHtml() {
       <li>Заповніть кроки по черзі. Поля з <span class="req">*</span> обов’язкові. Якщо щось не так — поле підсвітиться й з’явиться підказка.</li>
       <li>На останньому кроці форма покаже все, що треба заповнити чи виправити. Звіт PDF можна буде завантажити лише тоді, коли всі поля буде заповнено й помилок не залишиться.</li>
       <li>Готовий PDF надішліть черговому медслужби <b>лише через Element</b>. Інші месенджери заборонені.</li>
+      <li>На комп’ютері <b>Ctrl+Enter</b> (на Mac — <b>⌘+Enter</b>) — те саме, що кнопка «Далі».</li>
       <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт або чернетку — дані підставляться у форму.</li>
       <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}, якщо браузер це дозволяє. Копія видаляється після завантаження звіту або кнопкою «Очистити».</li>
     </ol></details>`;
@@ -1609,7 +1796,7 @@ function refreshErrors() {
   });
   const pr = progressOf(normalizeData(data));
   const bar = $('.prog i', app); if (bar) bar.style.width = `${pr.total ? Math.round(100 * pr.done / pr.total) : 0}%`;
-  const mid = $('.nav-mid', app); if (mid) mid.innerHTML = progressHtml(pr);
+  $$('.nav-mid, .steps-prog', app).forEach(el => { el.innerHTML = progressHtml(pr); });
   // «Далі попри пропуски»: якщо пропуски вже виправлено — повертаємо звичайну кнопку
   if (nextArmed === STEPS[step].id) {
     const note = $('#navnote', app), btn = $('#next', app);
@@ -1714,6 +1901,7 @@ app.addEventListener('change', e => {
     touched.add(path);
     refreshErrors(); scheduleAutosave();
   }
+  if (el.id === 'onlychg') { onlyChanged = el.checked; $('#review', app)?.classList.toggle('only', onlyChanged); return; }
   if (el.dataset.ack) {
     if (el.checked) ack.add(el.dataset.ack); else ack.delete(el.dataset.ack);
     // без перерендеру — лише стан кнопки звіту
@@ -1746,13 +1934,26 @@ app.addEventListener('click', e => {
     if (card) firstFocusable(card)?.focus({ preventScroll: true });
     scheduleAutosave(); return;
   }
+  if (t.dataset.dup) {
+    const [key, iStr] = t.dataset.dup.split(':'), i = +iStr, def = listDef(key);
+    const copy = Object.fromEntries(Object.entries(data[key][i]).filter(([k]) => !def.dup.includes(k)));
+    data[key].splice(i + 1, 0, copy);
+    shiftPaths(key, i + 1, +1);
+    openCard[key] = i + 1; dirty = true; problemsCache = null;
+    render({ keepScroll: true });
+    const card = $(`.card[data-card="${key}"][data-idx="${i + 1}"]`, app);
+    card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    card?.querySelector(`[data-path="${key}.${i + 1}.name"]`)?.focus({ preventScroll: true });
+    toast(`${def.item} ${i + 2} — копія точки ${i + 1}. Вкажіть назву, координати й зв’язок.`);
+    scheduleAutosave(); return;
+  }
   if (t.dataset.del) {
     const [key, iStr] = t.dataset.del.split(':'), i = +iStr, def = listDef(key);
     if (data[key].length <= 1 && def.keepOne) { toast(def.keepMsg); return; }
     if (!confirm(`Видалити ${def.addText} ${i + 1}?`)) return;
     data[key].splice(i, 1);
     openCard[key] = Math.max(0, Math.min(openCard[key], data[key].length - 1));
-    shiftPaths(key, i);
+    shiftPaths(key, i, -1);
     dirty = true; problemsCache = null; render({ keepScroll: true }); scheduleAutosave(); return;
   }
   if (t.dataset.toggle) {
@@ -1768,6 +1969,13 @@ app.addEventListener('click', e => {
   if (t.id === 'report') { download('report'); return; }
   if (t.id === 'draft') { download('draft'); return; }
   if (t.id === 'clear') { if (confirm('Очистити всі поля й видалити збережену чернетку з цього пристрою?')) { reset(); clearDraft(); toast('Форму очищено.'); } return; }
+});
+// Ctrl+Enter (на Mac — ⌘+Enter) — «Далі»; спершу знімаємо фокус, щоб значення поля встигло зберегтися
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || STEPS[step].final) return;
+  e.preventDefault();
+  document.activeElement?.blur?.();
+  onNext();
 });
 app.addEventListener('keydown', e => {
   if (e.target.id === 'openl' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#open').click(); return; }
@@ -1790,14 +1998,14 @@ function onNext() {
   gotoPath(errs[0].path, { flash: true });
 }
 
-// після видалення елемента списку зсуваємо індекси у touched/ack
-function shiftPaths(key, removed) {
+// Після видалення (dir = -1) чи вставки (dir = +1) елемента списку на місці at зсуваємо індекси у touched/ack
+function shiftPaths(key, at, dir) {
   const fix = set => new Set([...set].flatMap(k => {
     const m = k.match(new RegExp(`^(ack:)?${key}\\.(\\d+)\\.(.*)$`));
     if (!m) return [k];
     const idx = +m[2];
-    if (idx === removed) return [];
-    return [idx > removed ? `${m[1] || ''}${key}.${idx - 1}.${m[3]}` : k];
+    if (dir < 0 && idx === at) return [];
+    return [idx >= at + (dir < 0 ? 1 : 0) ? `${m[1] || ''}${key}.${idx + dir}.${m[3]}` : k];
   }));
   touched = fix(touched); ack = fix(ack);
 }
@@ -1817,6 +2025,7 @@ function goStep(i, { push = true, focus = true } = {}) {
   if (i < 0 || i >= STEPS.length) return;
   if (i === STEPS.length - 1) STEPS.forEach(s => { if (!s.final) attempted.add(s.id); });
   const changed = i !== step;
+  if (changed) unreviewed.delete(STEPS[step].id);   // крок відкрили й пішли з нього — переглянуто
   step = i; nextArmed = null; render(); scheduleAutosave();
   if (push && changed) pushHistory();
   if (focus) focusStepStart();
@@ -1838,7 +2047,7 @@ function gotoPath(path, { flash = true } = {}) {
   if (p.list) openCard[p.list] = p.idx;
   if (st >= 0) {
     const changed = st !== step;
-    if (changed) nextArmed = null;
+    if (changed) { nextArmed = null; unreviewed.delete(STEPS[step].id); }
     step = st; render({ keepScroll: !changed });
     if (changed) pushHistory();
   }
@@ -1858,7 +2067,7 @@ let saveTimer = null;
 function scheduleAutosave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveDraft, 600); }
 function saveDraft() {
   clearTimeout(saveTimer);
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ saved: new Date().toISOString(), step, attempted: [...attempted], data })); draftOk = true; }
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ saved: new Date().toISOString(), step, attempted: [...attempted], data, baseline, unreviewed: [...unreviewed] })); draftOk = true; }
   catch { if (draftOk) { draftOk = false; addNotice('nostore', 'warn', 'Браузер не дозволяє зберігати робочу копію на цьому пристрої. Зберігайте чернетку PDF, щоб не втратити введене.'); } }
 }
 function clearDraft() { clearTimeout(saveTimer); try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } }
@@ -1871,7 +2080,9 @@ function loadDraft() {
     // робоча копія могла лишитися від попередньої версії форми — мігруємо так само, як файл
     const v = Number.isInteger(d.data.v) && d.data.v >= 1 && d.data.v <= SCHEMA_VERSION ? d.data.v : SCHEMA_VERSION;
     const data = migrate(d.data, v); delete data.migratedFrom;
-    return { saved: d.saved, step: d.step | 0, attempted: Array.isArray(d.attempted) ? d.attempted.filter(x => typeof x === 'string') : [], data };
+    const strs = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : [];
+    const base = d.baseline && typeof d.baseline === 'object' && d.baseline.data ? { date: String(d.baseline.date || ''), data: normalizeData(d.baseline.data) } : null;
+    return { saved: d.saved, step: d.step | 0, attempted: strs(d.attempted), data, baseline: base, unreviewed: strs(d.unreviewed).filter(id => STEPS.some(s => s.id === id && !s.final)) };
   } catch { clearDraft(); return null; }
 }
 addEventListener('pagehide', () => { if (dirty) saveDraft(); });
@@ -1885,7 +2096,7 @@ function reset(d) {
   }
   if (!hasText(data.date) && !d) data.date = todayISO();
   step = 0; dirty = false; problemsCache = null; attempted = new Set(); touched = new Set(); ack = new Set(); openCard = firstCards(); reopened = null;
-  nextArmed = null; notices = [];
+  nextArmed = null; notices = []; baseline = null; unreviewed = new Set(); onlyChanged = false;
   ensureListItems();
   render();
 }
@@ -1937,7 +2148,12 @@ async function openPdf(file) {
     }
     if (errs.length) msg += ` Лишилося заповнити або виправити: ${errs.length} ${plural(errs.length, 'поле', 'поля', 'полів')}.`;
     delete data.migratedFrom;
-    goStep(STEPS.length - 1);
+    if (p.kind === 'report') {
+      baseline = { date: p.data.date, data: normalizeData(p.data) };
+      unreviewed = new Set(STEPS.filter(s => !s.final).map(s => s.id));
+      msg = `Дані підставлено зі звіту ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'}. Пройдіть кроки по черзі й оновіть те, що змінилося.` + msg.slice(msg.indexOf('завантажено.') + 'завантажено.'.length);
+      goStep(0, { push: false });
+    } else goStep(STEPS.length - 1);
     addNotice('opened', from ? 'warn' : 'info', msg);
   } catch (e) { alert(e && e.message || 'Не вдалося прочитати файл.'); }
 }
@@ -1957,7 +2173,7 @@ function toast(msg, ms = 5000) {
   const draft = loadDraft();
   if (draft) {
     reset(draft.data);
-    attempted = new Set(draft.attempted);
+    attempted = new Set(draft.attempted); baseline = draft.baseline; unreviewed = new Set(draft.unreviewed);
     goStep(Math.min(Math.max(0, draft.step), STEPS.length - 1), { push: false });
     addNotice('restored', 'info', `Відновлено робочу копію з цього пристрою (${new Date(draft.saved).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' })}). Щоб почати з нуля — натисніть «Очистити».`);
   } else { reset(); focusStepStart(); }

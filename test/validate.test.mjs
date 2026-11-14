@@ -4,6 +4,7 @@ import { KINDS, normalizeData, validateData, errorsOf, warningsOf, missingOf, in
 import { SECTIONS, STEPS, emptyData, stepOfSection, POINT_FIELDS, UNIT_CODES, unitName } from '../src/shared/schema.mjs';
 import { FULL, LEGACY_V1, POINT_V2 } from './fixtures.mjs';
 import { migrate } from '../src/shared/codec.mjs';
+import { reviewModel, diffAnswers } from '../src/shared/review.mjs';
 
 const TODAY = '2026-10-31';
 const errs = d => errorsOf(validateData(normalizeData(d), { today: TODAY }));
@@ -338,4 +339,37 @@ test('«не заповнено» окремо від «помилка»', () =>
   assert.equal(errs(g).find(x => x.path === 'points.1.training').kind, 'missing');
   const l = clone(); l.positions = [];
   assert.equal(errs(l).find(x => x.path === 'positions').kind, 'missing');
+});
+
+test('огляд відповідей: усі кроки, лише видимі поля, елементи списків', () => {
+  const m = reviewModel(normalizeData(FULL));
+  assert.equal(m.length, STEPS.length - 1);
+  const pts = m.find(x => x.step.id === 'points').sections[0];
+  assert.equal(pts.items.length, 2); assert.equal(pts.items[0].title, 'Точка 1 · Сосна');
+  assert.ok(pts.items[0].rows.some(r => r.label === 'Підготовка персоналу' && /Базова \(ASM\) — 6 осіб/.test(r.value)));
+  assert.ok(!pts.items[1].rows.some(r => r.path.endsWith('net_note')), 'приховане поле не показується');
+  const nod = normalizeData({ ...FULL, drops: 'Ні', drops_other: 'Ні' });
+  const drops = reviewModel(nod).find(x => x.step.id === 'drops');
+  assert.ok(!drops.sections.some(s => s.id === 'algo'), 'прихований розділ не показується');
+});
+
+test('порівняння з попереднім звітом', () => {
+  const base = normalizeData(FULL);
+  assert.equal(diffAnswers(base, base).count, 0);
+  const d = clone(); d.date = '2026-10-31';
+  assert.equal(diffAnswers(base, normalizeData(d)).count, 0, 'зміна дати — не зміна даних');
+  d.kb_phone = '+380 67 000 00 00';
+  d.points[0].hypo_bag = 'Є';
+  d.points.push({ name: 'Нова' });
+  d.positions.pop();
+  const r = diffAnswers(base, normalizeData(d));
+  assert.equal(r.changes.get('kb_phone'), FULL.kb_phone, 'зберігається попереднє значення');
+  assert.equal(r.changes.get('points.0.hypo_bag'), 'Немає');
+  assert.deepEqual(r.added, ['points.2']);
+  assert.deepEqual(r.removed.map(x => x.title), ['Позиція 2 · Птах-2']);
+  assert.equal(r.count, 4);
+  // поле, що стало прихованим (НРК «Є» → «Немає»), — теж зміна
+  const n = clone(); n.points[0].nrk = 'Немає';
+  const rn = diffAnswers(base, normalizeData(n));
+  assert.equal(rn.changes.get('points.0.nrk_count'), '2'); assert.equal(rn.changes.get('points.0.nrk'), 'Є');
 });

@@ -18,7 +18,7 @@ const read = p => readFileSync(resolve(ROOT, p), 'utf8');
 const shared = (...names) => ['text', 'icons', 'schema', 'validate', 'codec', 'pdfkit', 'report', ...names].map(n => `src/shared/${n}.mjs`);
 // В анкеті модуля плаката немає взагалі — підрозділи плакат не генерують
 export const TARGETS = {
-  'anketa.html': { template: 'src/form/index.html', css: 'src/form/form.css', modules: [...shared(), 'src/form/app.mjs'] },
+  'anketa.html': { template: 'src/form/index.html', css: 'src/form/form.css', modules: [...shared('review'), 'src/form/app.mjs'] },
   'medsluzhba.html': { template: 'src/med/index.html', css: 'src/med/med.css', modules: [...shared('poster'), 'src/med/app.mjs'] },
 };
 
