@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-jmbwQEc8s9+Nnn+wun4FA4fSpksn1eN63OS9JGunf8s='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-nS9JmrRyt8VjofsJWzBDuKcsfFgepmhBK7bTPzxNL2A='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -79,9 +79,17 @@ b, strong { font-weight: 600; }
 @container (min-width: 600px) {
   .fields, .grp-f { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 16px; }
   .w2 { grid-column: span 2; } .w3 { grid-column: span 3; } .w6 { grid-column: 1 / -1; }
-  /* поля в одному ряду: підписи різної довжини — елементи керування все одно на одній лінії */
-  :is(.fields, .grp-f) > .fld:not(.group) { grid-template-rows: 1fr; }
-  :is(.fields, .grp-f) > .fld:not(.group) > .lbl { align-self: end; }
+  /* Поля в одному ряду мають спільні «рядки»: підпис · підказка · поле · помилка (subgrid).
+     Тож поля стоять на одній лінії, хоч би який довгий був підпис і хоч би під яким полем з’явилась помилка. */
+  .fields, .grp-f { row-gap: 0; }
+  :is(.fields, .grp-f) > .fld { padding-bottom: 16px; }
+  :is(.fields, .grp-f) > .fld:not(.group) { grid-row: span 4; grid-template-rows: subgrid; row-gap: 0; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .lbl { grid-row: 1; align-self: end; margin-bottom: 6px; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .hint { grid-row: 2; margin-bottom: 6px; }
+  :is(.fields, .grp-f) > .fld:not(.group) > :is(input, select, textarea, .seg, .withnone) { grid-row: 3; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .err { grid-row: 4; margin-top: 6px; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .cnt { grid-row: 4; margin-top: 6px; }
+  .fields, .grp-f { margin-bottom: -16px; }
   .group .levels { grid-template-columns: 1fr 1fr; column-gap: 32px; }
   /* у широкому розділі ширина варіанта — за текстом, щоб «Є, нестабільний» не переносився */
   .seg-btn { flex: 1 1 auto; padding: 6px 8px; white-space: nowrap; }
@@ -114,10 +122,10 @@ select { padding-right: 40px; cursor: pointer; text-overflow: ellipsis;
 select:has(option[value=""]:checked) { color: #6b7682; }
 select option { color: var(--ink); }
 textarea { height: auto; min-height: 76px; padding: 11px 14px; resize: vertical; line-height: 1.45; }
-input:focus, textarea:focus, select:focus { border-color: var(--accent); background: var(--paper); box-shadow: 0 0 0 3px rgba(15,76,129,.15); }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); background-color: var(--paper); box-shadow: 0 0 0 3px rgba(15,76,129,.15); }
 input::placeholder, textarea::placeholder { color: #6b7682; }
 input:disabled { color: var(--mute); background: var(--line-2); }
-.fld.bad input, .fld.bad textarea, .fld.bad select, .lvl.bad input { border-color: var(--bad); background: #fff; }
+.fld.bad input, .fld.bad textarea, .fld.bad select, .lvl.bad input { border-color: var(--bad); background-color: #fff; }
 .fld.bad .seg { border-color: var(--bad); }
 .err { color: var(--bad); font-size: 13px; line-height: 1.4; }
 .err:empty { display: none; }
@@ -226,7 +234,6 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
 .box.warn li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .dl { display: grid; gap: 14px; padding-top: 6px; border-top: 1px solid var(--line-2); }
 .rule { background: var(--bad); color: #fff; padding: 12px 14px; border-radius: var(--r-s); font-size: 14px; line-height: 1.4; }
-.draftrow { display: grid; gap: 8px; padding-top: 6px; }
 .ver { font-size: 12px; color: var(--mute); }
 .intro .pref { margin-top: 10px; font-size: 15px; }
 .intro .hint { margin: 2px 0 0 30px; }
@@ -292,7 +299,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "2026.11.1-baae6cb";
+const BUILD_VERSION = "2026.11.1-87b4755";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -1412,7 +1419,8 @@ function diffAnswers(base, cur) {
 }
 
 // ---- src/form/app.mjs ----
-// Анкета для підрозділів: покрокова форма з живою перевіркою, чернетками й звітом PDF.
+// Анкета для підрозділів: покрокова форма з живою перевіркою й звітом PDF.
+// «Чернетки PDF» свідомо немає (заплутувала): незавершене зберігає лише робоча копія в браузері, якщо її ввімкнено.
 
 
 
@@ -1640,7 +1648,7 @@ function checkHtml() {
       <p>Дані підставлено з попереднього звіту. Відкрийте кожен крок і перевірте, чи нічого не змінилося.</p>
       <ul>${STEPS.map((s, i) => unreviewed.has(s.id) ? `<li><button type="button" class="link" data-step="${i}">${esc(s.title)}</button></li>` : '').join('')}</ul></div>` : ''}
     ${staleDate ? `<div class="box warn"><h3>Дата актуальності — з попереднього файла</h3>
-      <p>Дані підставлено з ${reopened.kind === 'draft' ? 'чернетки' : 'звіту'} від ${esc(fmtDate(reopened.date))}. Якщо ви перевірили й оновили дані сьогодні — поставте сьогоднішню дату.</p>
+      <p>Дані підставлено з файла від ${esc(fmtDate(reopened.date))}. Якщо ви перевірили й оновили дані сьогодні — поставте сьогоднішню дату.</p>
       <button type="button" class="btn" id="today">Поставити сьогоднішню дату (${esc(fmtDate(todayISO()))})</button></div>` : ''}
     ${bad.length ? `<div class="box bad"><h3>Потрібно виправити: ${bad.length} ${plural(bad.length, 'помилка', 'помилки', 'помилок')}</h3>
       <p>Ці поля заповнено неправильно. Натисніть на рядок, щоб перейти до поля.</p>${problemList(bad)}</div>` : ''}
@@ -1657,8 +1665,6 @@ function checkHtml() {
       <button type="button" class="btn primary big" id="report"${can ? '' : ' disabled'}>Завантажити звіт PDF</button>
       <p class="hint" id="dlhint"${can ? ' hidden' : ''}>${esc(dlHintText())}</p>
       <p class="rule"><b>Готовий PDF передавайте виключно через Element</b> черговому медичної служби. Передача будь-якими іншими месенджерами суворо заборонена.</p>
-      <div class="draftrow"><button type="button" class="btn" id="draft">Зберегти чернетку PDF</button>
-        <p class="hint">Чернетку можна відкрити в цій формі пізніше й продовжити. Для подання вона не придатна — на ній є позначка «ЧЕРНЕТКА».</p></div>
       <p class="ver">Версія анкети: ${esc(BUILD_VERSION)}</p>
     </div>
   </section>`;
@@ -1797,8 +1803,8 @@ function introHtml() {
       <li>На останньому кроці форма покаже все, що треба заповнити чи виправити. Звіт PDF можна буде завантажити лише тоді, коли всі поля буде заповнено й помилок не залишиться.</li>
       <li>Готовий PDF надішліть черговому медслужби <b>лише через Element</b>. Інші месенджери заборонені.</li>
       <li>На комп’ютері <b>Ctrl+Enter</b> (на Mac — <b>⌘+Enter</b>) — те саме, що кнопка «Далі».</li>
-      <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт або чернетку — дані підставляться у форму.</li>
-      <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Якщо ввімкнено збереження нижче, браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}; вона видаляється після завантаження звіту або кнопкою «Очистити».</li>
+      <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт — дані підставляться у форму.</li>
+      <li>Якщо ввімкнено збереження нижче, браузер тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}: можна закрити вкладку й продовжити пізніше. Копія видаляється після завантаження звіту або кнопкою «Очистити». Без неї введене зникне, якщо закрити вкладку до завантаження звіту.</li>
     </ol>
     <label class="ackl pref"><input type="checkbox" id="autosave"${autosave ? ' checked' : ''}> <span>Зберігати робочу копію в цьому браузері</span></label>
     <p class="hint">Не вмикайте на комп’ютері, яким користуються інші люди.</p>
@@ -1922,7 +1928,7 @@ app.addEventListener('input', e => {
   if (!el.dataset.path) return;
   if (!autosave && !warnedNoSave) {
     warnedNoSave = true;
-    addNotice('nosave', 'info', 'Робоча копія на цьому комп’ютері не зберігається. Щоб не втратити введене, зберігайте чернетку PDF. Якщо комп’ютер лише ваш — увімкніть збереження у розділі «Як працює анкета» на першому кроці.');
+    addNotice('nosave', 'info', 'Робоча копія на цьому комп’ютері не зберігається: якщо закрити вкладку до завантаження звіту, введене зникне. Якщо комп’ютер лише ваш — увімкніть збереження у розділі «Як працює анкета» на першому кроці.');
   }
   setAt(el.dataset.path, el.value);
   if (el.tagName === 'TEXTAREA') counter(el);
@@ -2020,8 +2026,7 @@ app.addEventListener('click', e => {
     return;
   }
   if (t.dataset.goto) { gotoPath(t.dataset.goto); return; }
-  if (t.id === 'report') { download('report'); return; }
-  if (t.id === 'draft') { download('draft'); return; }
+  if (t.id === 'report') { download(); return; }
   if (t.id === 'clear') { if (confirm('Очистити всі поля й видалити збережену чернетку з цього пристрою?')) { reset(); clearDraft(); toast('Форму очищено.'); } return; }
 });
 // Ctrl+Enter (на Mac — ⌘+Enter) — «Далі»; спершу знімаємо фокус, щоб значення поля встигло зберегтися
@@ -2156,22 +2161,20 @@ function reset(d) {
 }
 
 // ---------- PDF ----------
-async function download(kind) {
-  if (kind === 'report' && !canDownload()) { toast('Спочатку заповніть усі поля, виправте помилки й підтвердьте зауваження.'); return; }
-  const btn = $(`#${kind}`, app), text = btn.textContent;
+async function download() {
+  if (!canDownload()) { toast('Спочатку заповніть усі поля, виправте помилки й підтвердьте зауваження.'); return; }
+  const btn = $('#report', app), text = btn.textContent;
   btn.disabled = true; btn.textContent = 'Створюю…';
   try {
     await loadFonts();
     const d = normalizeData(data), created = new Date().toISOString();
-    const dd = buildReport(d, { kind, created, version: BUILD_VERSION });
+    const dd = buildReport(d, { kind: 'report', created, version: BUILD_VERSION });
     const blob = await pdfMake.createPdf(dd).getBlob();
-    const name = safeFileName([kind === 'draft' ? 'Chernetka' : 'Zvit_med', d.unit?.toUpperCase(), d.date].filter(hasText).join('_')) + '.pdf';
+    const name = safeFileName(['Zvit_med', d.unit?.toUpperCase(), d.date].filter(hasText).join('_')) + '.pdf';
     saveBlob(blob, name);
     dirty = false;
-    if (kind === 'report') {
-      clearDraft();     // звіт сформовано — робоча копія на пристрої більше не потрібна
-      addNotice('saved', 'ok', `Звіт збережено: ${name}. Надішліть його черговому медслужби через Element. На спільному комп’ютері після цього видаліть файл із «Завантажень» і натисніть «Очистити».`);
-    } else toast(`Чернетку збережено: ${name}`, 7000);
+    clearDraft();     // звіт сформовано — робоча копія на пристрої більше не потрібна
+    addNotice('saved', 'ok', `Звіт збережено: ${name}. Надішліть його черговому медслужби через Element. На спільному комп’ютері після цього видаліть файл із «Завантажень» і натисніть «Очистити».`);
   } catch (e) { console.error(e); alert('Не вдалося створити PDF: ' + (e && e.message || e)); }
   finally { btn.textContent = text; render({ keepScroll: true }); }
 }
@@ -2191,7 +2194,7 @@ async function openPdf(file) {
     reset(p.data);
     reopened = { date: p.data.date, kind: p.kind };
     const errs = errors();
-    const what = p.kind === 'draft' ? 'Чернетку' : 'Звіт';
+    const what = p.kind === 'draft' ? 'Файл' : 'Звіт';      // старі «чернетки PDF» ще можуть трапитися — відкриваються як звичайний файл
     let msg = `${what} ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'} завантажено.`;
     const from = p.legacy ? 1 : p.data.migratedFrom;
     if (from) {

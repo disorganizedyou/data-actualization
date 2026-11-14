@@ -143,9 +143,7 @@ const broken = Buffer.from(report.bytes); const mi = broken.indexOf('DANIFORM2:'
 const viaFile = await readPdfBytes(new Uint8Array(broken), { inflate });
 assert.deepEqual(viaFile.data, payload.data, 'дані з вкладеного файла збігаються з маркером');
 
-const draft = await download('#draft');
-assert.match(draft.name, /^Chernetka_2MB_/);
-assert.equal((await readPdfBytes(draft.bytes, { inflate })).kind, 'draft');
+assert.equal(await page.$('#draft'), null, 'кнопки «чернетка PDF» немає');
 
 console.log('▶ анкета: повторне відкриття звіту');
 await page.goto(FORM);
@@ -188,11 +186,11 @@ mpage.on('pageerror', e => errors.push('med: ' + e.message));
 mpage.on('console', m => { if (m.type() === 'error') errors.push('med: ' + m.text()); });
 mpage.on('dialog', d => d.accept());
 await mpage.goto(MED);
-await mpage.setInputFiles('#open', [report.path, draft.path]);
+await mpage.setInputFiles('#open', [report.path, report2.path]);
 await mpage.waitForSelector('.tbl');
 const rows = await mpage.$$('.tbl tbody tr:not(.det)');
 assert.equal(rows.length, 1, 'той самий підрозділ двічі → один рядок');
-assert.match(await mpage.textContent('.tbl .st'), /повний/, 'повний звіт має пріоритет над чернеткою з тією ж датою');
+assert.match(await mpage.textContent('.tbl .st'), /повний/);
 await mpage.click('[data-details]');
 await mpage.screenshot({ path: resolve(OUT, 'med.png'), fullPage: true });
 const mdl = async sel => { const [dl] = await Promise.all([mpage.waitForEvent('download'), mpage.click(sel)]); const p = resolve(OUT, dl.suggestedFilename()); await dl.saveAs(p); return { name: dl.suggestedFilename(), bytes: new Uint8Array(readFileSync(p)) }; };

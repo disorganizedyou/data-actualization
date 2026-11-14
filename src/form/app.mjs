@@ -1,4 +1,5 @@
-// Анкета для підрозділів: покрокова форма з живою перевіркою, чернетками й звітом PDF.
+// Анкета для підрозділів: покрокова форма з живою перевіркою й звітом PDF.
+// «Чернетки PDF» свідомо немає (заплутувала): незавершене зберігає лише робоча копія в браузері, якщо її ввімкнено.
 
 import { STEPS, SECTIONS, NONE, FORM_NAME, CONTACTS_NOTE, SCHEMA_VERSION, LIST_KEYS, sectionById, listDef, listSection, visible, required, emptyData, stepOfSection } from './schema.mjs';
 import { hasText, esc, fmtDate, todayISO, safeFileName, plural } from './text.mjs';
@@ -227,7 +228,7 @@ function checkHtml() {
       <p>Дані підставлено з попереднього звіту. Відкрийте кожен крок і перевірте, чи нічого не змінилося.</p>
       <ul>${STEPS.map((s, i) => unreviewed.has(s.id) ? `<li><button type="button" class="link" data-step="${i}">${esc(s.title)}</button></li>` : '').join('')}</ul></div>` : ''}
     ${staleDate ? `<div class="box warn"><h3>Дата актуальності — з попереднього файла</h3>
-      <p>Дані підставлено з ${reopened.kind === 'draft' ? 'чернетки' : 'звіту'} від ${esc(fmtDate(reopened.date))}. Якщо ви перевірили й оновили дані сьогодні — поставте сьогоднішню дату.</p>
+      <p>Дані підставлено з файла від ${esc(fmtDate(reopened.date))}. Якщо ви перевірили й оновили дані сьогодні — поставте сьогоднішню дату.</p>
       <button type="button" class="btn" id="today">Поставити сьогоднішню дату (${esc(fmtDate(todayISO()))})</button></div>` : ''}
     ${bad.length ? `<div class="box bad"><h3>Потрібно виправити: ${bad.length} ${plural(bad.length, 'помилка', 'помилки', 'помилок')}</h3>
       <p>Ці поля заповнено неправильно. Натисніть на рядок, щоб перейти до поля.</p>${problemList(bad)}</div>` : ''}
@@ -244,8 +245,6 @@ function checkHtml() {
       <button type="button" class="btn primary big" id="report"${can ? '' : ' disabled'}>Завантажити звіт PDF</button>
       <p class="hint" id="dlhint"${can ? ' hidden' : ''}>${esc(dlHintText())}</p>
       <p class="rule"><b>Готовий PDF передавайте виключно через Element</b> черговому медичної служби. Передача будь-якими іншими месенджерами суворо заборонена.</p>
-      <div class="draftrow"><button type="button" class="btn" id="draft">Зберегти чернетку PDF</button>
-        <p class="hint">Чернетку можна відкрити в цій формі пізніше й продовжити. Для подання вона не придатна — на ній є позначка «ЧЕРНЕТКА».</p></div>
       <p class="ver">Версія анкети: ${esc(BUILD_VERSION)}</p>
     </div>
   </section>`;
@@ -384,8 +383,8 @@ function introHtml() {
       <li>На останньому кроці форма покаже все, що треба заповнити чи виправити. Звіт PDF можна буде завантажити лише тоді, коли всі поля буде заповнено й помилок не залишиться.</li>
       <li>Готовий PDF надішліть черговому медслужби <b>лише через Element</b>. Інші месенджери заборонені.</li>
       <li>На комп’ютері <b>Ctrl+Enter</b> (на Mac — <b>⌘+Enter</b>) — те саме, що кнопка «Далі».</li>
-      <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт або чернетку — дані підставляться у форму.</li>
-      <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Якщо ввімкнено збереження нижче, браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}; вона видаляється після завантаження звіту або кнопкою «Очистити».</li>
+      <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт — дані підставляться у форму.</li>
+      <li>Якщо ввімкнено збереження нижче, браузер тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}: можна закрити вкладку й продовжити пізніше. Копія видаляється після завантаження звіту або кнопкою «Очистити». Без неї введене зникне, якщо закрити вкладку до завантаження звіту.</li>
     </ol>
     <label class="ackl pref"><input type="checkbox" id="autosave"${autosave ? ' checked' : ''}> <span>Зберігати робочу копію в цьому браузері</span></label>
     <p class="hint">Не вмикайте на комп’ютері, яким користуються інші люди.</p>
@@ -509,7 +508,7 @@ app.addEventListener('input', e => {
   if (!el.dataset.path) return;
   if (!autosave && !warnedNoSave) {
     warnedNoSave = true;
-    addNotice('nosave', 'info', 'Робоча копія на цьому комп’ютері не зберігається. Щоб не втратити введене, зберігайте чернетку PDF. Якщо комп’ютер лише ваш — увімкніть збереження у розділі «Як працює анкета» на першому кроці.');
+    addNotice('nosave', 'info', 'Робоча копія на цьому комп’ютері не зберігається: якщо закрити вкладку до завантаження звіту, введене зникне. Якщо комп’ютер лише ваш — увімкніть збереження у розділі «Як працює анкета» на першому кроці.');
   }
   setAt(el.dataset.path, el.value);
   if (el.tagName === 'TEXTAREA') counter(el);
@@ -607,8 +606,7 @@ app.addEventListener('click', e => {
     return;
   }
   if (t.dataset.goto) { gotoPath(t.dataset.goto); return; }
-  if (t.id === 'report') { download('report'); return; }
-  if (t.id === 'draft') { download('draft'); return; }
+  if (t.id === 'report') { download(); return; }
   if (t.id === 'clear') { if (confirm('Очистити всі поля й видалити збережену чернетку з цього пристрою?')) { reset(); clearDraft(); toast('Форму очищено.'); } return; }
 });
 // Ctrl+Enter (на Mac — ⌘+Enter) — «Далі»; спершу знімаємо фокус, щоб значення поля встигло зберегтися
@@ -743,22 +741,20 @@ function reset(d) {
 }
 
 // ---------- PDF ----------
-async function download(kind) {
-  if (kind === 'report' && !canDownload()) { toast('Спочатку заповніть усі поля, виправте помилки й підтвердьте зауваження.'); return; }
-  const btn = $(`#${kind}`, app), text = btn.textContent;
+async function download() {
+  if (!canDownload()) { toast('Спочатку заповніть усі поля, виправте помилки й підтвердьте зауваження.'); return; }
+  const btn = $('#report', app), text = btn.textContent;
   btn.disabled = true; btn.textContent = 'Створюю…';
   try {
     await loadFonts();
     const d = normalizeData(data), created = new Date().toISOString();
-    const dd = buildReport(d, { kind, created, version: BUILD_VERSION });
+    const dd = buildReport(d, { kind: 'report', created, version: BUILD_VERSION });
     const blob = await pdfMake.createPdf(dd).getBlob();
-    const name = safeFileName([kind === 'draft' ? 'Chernetka' : 'Zvit_med', d.unit?.toUpperCase(), d.date].filter(hasText).join('_')) + '.pdf';
+    const name = safeFileName(['Zvit_med', d.unit?.toUpperCase(), d.date].filter(hasText).join('_')) + '.pdf';
     saveBlob(blob, name);
     dirty = false;
-    if (kind === 'report') {
-      clearDraft();     // звіт сформовано — робоча копія на пристрої більше не потрібна
-      addNotice('saved', 'ok', `Звіт збережено: ${name}. Надішліть його черговому медслужби через Element. На спільному комп’ютері після цього видаліть файл із «Завантажень» і натисніть «Очистити».`);
-    } else toast(`Чернетку збережено: ${name}`, 7000);
+    clearDraft();     // звіт сформовано — робоча копія на пристрої більше не потрібна
+    addNotice('saved', 'ok', `Звіт збережено: ${name}. Надішліть його черговому медслужби через Element. На спільному комп’ютері після цього видаліть файл із «Завантажень» і натисніть «Очистити».`);
   } catch (e) { console.error(e); alert('Не вдалося створити PDF: ' + (e && e.message || e)); }
   finally { btn.textContent = text; render({ keepScroll: true }); }
 }
@@ -778,7 +774,7 @@ async function openPdf(file) {
     reset(p.data);
     reopened = { date: p.data.date, kind: p.kind };
     const errs = errors();
-    const what = p.kind === 'draft' ? 'Чернетку' : 'Звіт';
+    const what = p.kind === 'draft' ? 'Файл' : 'Звіт';      // старі «чернетки PDF» ще можуть трапитися — відкриваються як звичайний файл
     let msg = `${what} ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'} завантажено.`;
     const from = p.legacy ? 1 : p.data.migratedFrom;
     if (from) {

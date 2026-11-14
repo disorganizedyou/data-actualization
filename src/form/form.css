@@ -68,9 +68,17 @@ b, strong { font-weight: 600; }
 @container (min-width: 600px) {
   .fields, .grp-f { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 16px; }
   .w2 { grid-column: span 2; } .w3 { grid-column: span 3; } .w6 { grid-column: 1 / -1; }
-  /* поля в одному ряду: підписи різної довжини — елементи керування все одно на одній лінії */
-  :is(.fields, .grp-f) > .fld:not(.group) { grid-template-rows: 1fr; }
-  :is(.fields, .grp-f) > .fld:not(.group) > .lbl { align-self: end; }
+  /* Поля в одному ряду мають спільні «рядки»: підпис · підказка · поле · помилка (subgrid).
+     Тож поля стоять на одній лінії, хоч би який довгий був підпис і хоч би під яким полем з’явилась помилка. */
+  .fields, .grp-f { row-gap: 0; }
+  :is(.fields, .grp-f) > .fld { padding-bottom: 16px; }
+  :is(.fields, .grp-f) > .fld:not(.group) { grid-row: span 4; grid-template-rows: subgrid; row-gap: 0; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .lbl { grid-row: 1; align-self: end; margin-bottom: 6px; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .hint { grid-row: 2; margin-bottom: 6px; }
+  :is(.fields, .grp-f) > .fld:not(.group) > :is(input, select, textarea, .seg, .withnone) { grid-row: 3; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .err { grid-row: 4; margin-top: 6px; }
+  :is(.fields, .grp-f) > .fld:not(.group) > .cnt { grid-row: 4; margin-top: 6px; }
+  .fields, .grp-f { margin-bottom: -16px; }
   .group .levels { grid-template-columns: 1fr 1fr; column-gap: 32px; }
   /* у широкому розділі ширина варіанта — за текстом, щоб «Є, нестабільний» не переносився */
   .seg-btn { flex: 1 1 auto; padding: 6px 8px; white-space: nowrap; }
@@ -103,10 +111,10 @@ select { padding-right: 40px; cursor: pointer; text-overflow: ellipsis;
 select:has(option[value=""]:checked) { color: #6b7682; }
 select option { color: var(--ink); }
 textarea { height: auto; min-height: 76px; padding: 11px 14px; resize: vertical; line-height: 1.45; }
-input:focus, textarea:focus, select:focus { border-color: var(--accent); background: var(--paper); box-shadow: 0 0 0 3px rgba(15,76,129,.15); }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); background-color: var(--paper); box-shadow: 0 0 0 3px rgba(15,76,129,.15); }
 input::placeholder, textarea::placeholder { color: #6b7682; }
 input:disabled { color: var(--mute); background: var(--line-2); }
-.fld.bad input, .fld.bad textarea, .fld.bad select, .lvl.bad input { border-color: var(--bad); background: #fff; }
+.fld.bad input, .fld.bad textarea, .fld.bad select, .lvl.bad input { border-color: var(--bad); background-color: #fff; }
 .fld.bad .seg { border-color: var(--bad); }
 .err { color: var(--bad); font-size: 13px; line-height: 1.4; }
 .err:empty { display: none; }
@@ -215,7 +223,6 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
 .box.warn li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .dl { display: grid; gap: 14px; padding-top: 6px; border-top: 1px solid var(--line-2); }
 .rule { background: var(--bad); color: #fff; padding: 12px 14px; border-radius: var(--r-s); font-size: 14px; line-height: 1.4; }
-.draftrow { display: grid; gap: 8px; padding-top: 6px; }
 .ver { font-size: 12px; color: var(--mute); }
 .intro .pref { margin-top: 10px; font-size: 15px; }
 .intro .hint { margin: 2px 0 0 30px; }
