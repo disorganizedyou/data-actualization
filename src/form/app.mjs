@@ -75,7 +75,7 @@ function fieldHtml(f, path, item) {
   const kind = kindOf(f);
   const ph = f.ph || kind?.ph || '';
   const im = kind?.inputmode ? ` inputmode="${kind.inputmode}"` : '';
-  const caps = kind?.autocapitalize || (f.v === 'unit' ? 'characters' : null);
+  const caps = kind?.autocapitalize || null;
   const textAttrs = ` autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="next" aria-describedby="${id}_err"${caps ? ` autocapitalize="${caps}"` : ''}`;
 
   if (f.t === 'group') {
@@ -109,6 +109,9 @@ function fieldHtml(f, path, item) {
   }
   let ctl;
   if (f.t === 'area') ctl = `<textarea id="${id}" data-path="${esc(path)}" rows="2" maxlength="${maxLen(f)}" placeholder="${esc(ph)}" aria-describedby="${id}_err">${esc(v)}</textarea><span class="cnt" data-cnt="${esc(path)}"></span>`;
+  else if (f.t === 'sel') ctl = `<select id="${id}" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" aria-describedby="${id}_err">
+      <option value=""${f.o.includes(v) ? '' : ' selected'}>— оберіть зі списку —</option>
+      ${f.o.map((o, i) => `<option value="${esc(o)}"${v === o ? ' selected' : ''}>${esc(f.ol?.[i] ?? o)}</option>`).join('')}</select>`;
   else if (f.t === 'date') ctl = `<input id="${id}" type="date" data-path="${esc(path)}" value="${esc(v)}" max="${todayISO()}" aria-describedby="${id}_err">`;
   else ctl = `<input id="${id}" type="text" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" maxlength="${maxLen(f)}" placeholder="${esc(ph)}" value="${esc(v)}"${im}${textAttrs}>`;
   return `<div class="fld" data-field="${esc(path)}"${show}${hidden}>${label}${hint}${ctl}${err}</div>`;
@@ -263,7 +266,7 @@ function showFieldError(path) {
     const errEl = fld.querySelector(':scope > .err');
     fld.classList.toggle('bad', !!showIt);
     if (errEl) errEl.textContent = showIt ? p.msg : '';
-    fld.querySelectorAll(':scope > input, :scope > textarea, :scope > .withnone > input, :scope > .seg').forEach(el => el.setAttribute('aria-invalid', showIt ? 'true' : 'false'));
+    fld.querySelectorAll(':scope > input, :scope > textarea, :scope > select, :scope > .withnone > input, :scope > .seg').forEach(el => el.setAttribute('aria-invalid', showIt ? 'true' : 'false'));
   }
   // окремі рядки групи підготовки
   const inp = app.querySelector(`[data-path="${CSS.escape(path)}"]`);
@@ -451,7 +454,7 @@ function gotoPath(path) {
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const box = el.closest('.fld') || el;
-    const focusable = el.matches('input:not([disabled]),textarea') ? el : box.querySelector('input:not([disabled]):not([type=checkbox]),textarea,.seg-btn') || box.querySelector('input[type=checkbox]');
+    const focusable = el.matches('input:not([disabled]),textarea,select') ? el : box.querySelector('input:not([disabled]):not([type=checkbox]),textarea,select,.seg-btn') || box.querySelector('input[type=checkbox]');
     focusable?.focus({ preventScroll: true });
     box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1600);
   });

@@ -1,6 +1,6 @@
 // Плакат A4 «Довідка чергового» — друкує медслужба для себе зі звіту підрозділу.
 
-import { ROLES, CONTACT, sectionById, dropsDone, noDrops, NONE } from './schema.mjs';
+import { ROLES, CONTACT, sectionById, dropsDone, noDrops, unitName, NONE } from './schema.mjs';
 import { hasText, fmtDate, plural } from './text.mjs';
 import { kit, C, THEME, PAGE, ROLE_STYLE, T, textWidth, starWidth } from './pdfkit.mjs';
 import { iconSvg } from './icons.mjs';
@@ -22,7 +22,7 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
       { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] },
       ...(warn ? [{ text: warn.toUpperCase(), color: '#fff', background: C.bad, bold: true, fontSize: z(8), margin: [0, z(6), 0, 0] }] : [])] },
     { width: UNIT_W, stack: [
-      { text: 'Підрозділ', color: C.grey, fontSize: z(8), alignment: 'right' },
+      { text: unitName(d.unit) || 'Підрозділ', color: C.grey, fontSize: z(8), alignment: 'right' },
       { text: unit, font: THEME.head, bold: true, fontSize: unitFs, lineHeight: .95, noWrap: true, alignment: 'right' }] },
   ] };
 

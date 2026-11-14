@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-dqZNvE/Am+m1aOZPsqLmuE6lb0/pXUkU2+CUK8VGl6I='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-M+Q5oMg50TQhRf6OwhK0V+zseKZ4hIFBg18skeEnO3g='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -72,16 +72,22 @@ b, strong { font-weight: 600; }
 .req { color: var(--bad); margin-left: 3px; }
 .ico { display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: -3px; }
 .ico svg { display: block; width: 100%; height: 100%; }
-input[type=text], input[type=date], textarea {
+input[type=text], input[type=date], textarea, select {
   width: 100%; min-width: 0; height: var(--h); padding: 0 14px; border: 1.5px solid var(--line); border-radius: var(--r-s);
   background: var(--field); outline: none; font-size: 16px; transition: border-color .15s, box-shadow .15s, background .15s; appearance: none; -webkit-appearance: none;
 }
 input[type=date] { display: block; }
+/* стрілка списку — градієнтами, без зображень (зображення заборонені політикою безпеки сторінки) */
+select { padding-right: 40px; cursor: pointer; text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%), linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position: calc(100% - 21px) 21px, calc(100% - 15px) 21px; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; }
+select:has(option[value=""]:checked) { color: #6b7682; }
+select option { color: var(--ink); }
 textarea { height: auto; min-height: 76px; padding: 11px 14px; resize: vertical; line-height: 1.45; }
-input:focus, textarea:focus { border-color: var(--accent); background: var(--paper); box-shadow: 0 0 0 3px rgba(15,76,129,.15); }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); background: var(--paper); box-shadow: 0 0 0 3px rgba(15,76,129,.15); }
 input::placeholder, textarea::placeholder { color: #6b7682; }
 input:disabled { color: var(--mute); background: var(--line-2); }
-.fld.bad input, .fld.bad textarea, .lvl.bad input { border-color: var(--bad); background: #fff; }
+.fld.bad input, .fld.bad textarea, .fld.bad select, .lvl.bad input { border-color: var(--bad); background: #fff; }
 .fld.bad .seg { border-color: var(--bad); }
 .err { color: var(--bad); font-size: 13px; line-height: 1.4; }
 .err:empty { display: none; }
@@ -180,8 +186,7 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
 @media (min-width: 640px) {
   .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fields fieldset.group { grid-column: 1 / -1; }
-  .fields :is(.fld:has(textarea), .fld:has(.seg)) { grid-column: 1 / -1; }
-  .sec[data-section="general"] .fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fields :is(.fld:has(textarea), .fld:has(.seg), .fld:has(select)) { grid-column: 1 / -1; }
   .sec[data-section="kb"] .fields, .sec[data-section="s4"] .fields, .sec[data-section="mp"] .fields, .sec[data-section="mphead"] .fields, .sec[data-section="mploc"] .fields { grid-template-columns: 1fr; }
   .sum { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .h2 { font-size: 28px; }
@@ -210,7 +215,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-088fcbb";
+const BUILD_VERSION = "v2-37816b7";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -273,6 +278,7 @@ const iconSvg = (name, color = 'currentColor') =>
 //   t        тип: text (типово) | date | sel | seg | area | count | group
 //   v        «вид» значення для нормалізації/перевірки (див. validate.mjs KINDS)
 //   o        варіанти для sel/seg
+//   ol       підписи варіантів для sel (за замовчуванням = o)
 //   req      обов’язкове: true | (item, data) => boolean
 //   showIf   [ключ, [значення…]] — показувати лише коли інше поле має одне зі значень;
 //            або функція (item) => boolean для складніших умов
@@ -285,6 +291,43 @@ const SCHEMA_VERSION = 5;
 const NONE = 'Немає';
 const TITLE = 'Актуалізація даних для медичної служби';
 const FORM_NAME = 'Анкета актуалізації даних';
+
+// Підрозділи: [коротка назва (зберігається у звіті), повна назва]. Щоб додати підрозділ — допишіть рядок.
+const UNITS = [
+  ['1МБ', '1 механізований батальйон'],
+  ['2МБ', '2 механізований батальйон'],
+  ['3МБ', '3 механізований батальйон'],
+  ['МПБ', 'мотопіхотний батальйон'],
+  ['СБ', 'стрілецький батальйон'],
+  ['ТБ', 'танковий батальйон'],
+  ['ББПС', 'батальйон безпілотних систем'],
+  ['САДН', 'самохідний артилерійський дивізіон'],
+  ['ЗРДН', 'зенітний ракетний дивізіон'],
+  ['БАР', 'батарея артилерійської розвідки'],
+  ['БУ', 'батальйон управління'],
+  ['РВБ', 'ремонтно-відновлювальний батальйон'],
+  ['БМЗ', 'батальйон матеріального забезпечення'],
+  ['РБНС', 'рота безпілотних наземних систем'],
+  ['ВЗАБ', 'взвод забезпечення'],
+  ['ВЗВ СНАЙП', 'взвод снайперів'],
+  ['ІСР', 'інженерно-саперна рота'],
+  ['МЕДР', 'медична рота'],
+  ['РЕАБАТР', 'реактивна артилерійська батарея'],
+  ['ВПТРК', 'взвод протитанкових ракетних комплексів'],
+  ['РР', 'розвідувальна рота'],
+  ['РРЕБ', 'рота радіоелектронної боротьби'],
+  ['ВРХБЗ', 'взвод радіаційного, хімічного, біологічного захисту'],
+  ['ВУНППО', 'взвод управління начальника протиповітряної оборони'],
+  ['ВПТЗР', 'відділення протидії технічним засобам розвідки'],
+  ['ГКБС', 'група контролю бойового стресу'],
+  ['ГПСВ', 'група психологічного супроводу та відновлення'],
+  ['ГІ', 'група інструкторів'],
+  ['42ЗР', '42 запасна рота'],
+  ['ЗБ 432 ОП БПС', 'зведений батальйон 432 окремого полку безпілотних систем 11 армійського корпусу'],
+];
+const UNIT_CODES = UNITS.map(u => u[0]);
+// Повна назва підрозділу за короткою ('' — якщо такого в списку немає)
+const unitName = code => (UNITS.find(u => u[0] === String(code ?? '').trim().toUpperCase()) || [])[1] || '';
 
 const OPT = {
   yn: ['Так', 'Ні'],
@@ -392,8 +435,8 @@ const roleSection = r => ({
 // ---- Розділи даних ----
 const SECTIONS = [
   { id: 'general', title: 'Загальні дані', fields: [
-    { k: 'unit', l: 'Підрозділ — коротка назва', pl: 'Підрозділ', v: 'unit', max: 12, req: true, ph: 'МР, 2МБ, 1 РОТА…',
-      hint: 'Як у документах. Великі літери з’являться автоматично.' },
+    { k: 'unit', l: 'Підрозділ', pl: 'Підрозділ', t: 'sel', v: 'unit', req: true,
+      o: UNIT_CODES, ol: UNITS.map(([code, name]) => `${code} — ${name}`) },
     { k: 'date', l: 'Дата актуальності даних', pl: 'Дата', t: 'date', req: true },
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
@@ -521,6 +564,8 @@ function normElement(v) {
   return s.replace(/^@/, '').replace(/:.*$/, '');
 }
 
+const unitKey = s => s.replace(/[\s.\-]/g, '');
+
 const KINDS = {
   phone: { ph: '+380 67 123 45 67', norm: normPhone, ok: isPhone, inputmode: 'tel',
     msg: 'Номер телефону у форматі +380 67 123 45 67 (для України — рівно 9 цифр після +380)' },
@@ -544,8 +589,9 @@ const KINDS = {
     ok: v => /^\d{1,4}$/.test(v) && +v > 0 && +v <= 1440,
     msg: 'Ціле число хвилин від 1 до 1440, наприклад 15' },
   count: { ph: '0', inputmode: 'numeric', max: 3, norm: intNorm, ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
-  unit: { norm: v => squash(v).toUpperCase(), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} .\-\/]{0,11}$/u.test(v) && /[\p{L}\p{N}]/u.test(v),
-    msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс, скісна риска' },
+  // Підрозділ обирають зі списку; значення зі старих звітів («2 мб», «2-МБ») зводимо до назви зі списку
+  unit: { max: 40, norm: v => { const u = squash(v).toUpperCase(); return UNIT_CODES.find(c => unitKey(c) === unitKey(u)) || u; },
+    ok: v => UNIT_CODES.includes(v), msg: 'Оберіть підрозділ зі списку' },
   callsign: { norm: v => squash(v.replace(APOS, '’')), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} ’.\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
     msg: 'Позивний: літери, цифри, пробіл, дефіс, апостроф (без телефонів і посилань)' },
   name: { norm: v => squash(v.replace(APOS, '’')), ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
@@ -624,12 +670,12 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
   const v = item[f.k], p = path + f.k;
   if (f.none && v === NONE) return;
   if (!hasText(v)) {
-    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'seg' || f.t === 'sel' ? 'Оберіть відповідь' : 'Обов’язкове поле');
+    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'sel' ? 'Оберіть зі списку' : f.t === 'seg' ? 'Оберіть відповідь' : 'Обов’язкове поле');
     return;
   }
   if (v.length > maxLen(f)) { push(p, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`); return; }
   if (f.t === 'area' && v.split('\n').length > MAX_AREA_LINES) { push(p, `Забагато рядків (${v.split('\n').length}), максимум ${MAX_AREA_LINES} — скоротіть текст`); return; }
-  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, 'Недопустиме значення — оберіть зі списку'); return; }
+  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, f.t === 'sel' ? `«${v}» немає у списку — оберіть зі списку` : 'Недопустиме значення — оберіть зі списку'); return; }
   if (f.t === 'date' && !validISODate(v)) { push(p, 'Некоректна дата'); return; }
   const kind = kindOf(f);
   if (kind && !kind.ok(v.trim())) push(p, kind.msg);
@@ -1157,6 +1203,8 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     { columns: [{ text: draft ? 'Чернетка звіту' : 'Повний звіт', color: C.ink, bold: true }, { text: status.text, color: status.color, bold: true, alignment: 'right' }] },
     { text: TITLE, font: THEME.head, bold: true, fontSize: z(16), margin: [0, z(2), 0, z(10)] },
     { columns: meta.map(([l, v]) => ({ width: 'auto', margin: [0, 0, z(28), 0], stack: [{ text: l, color: C.grey }, val(v, z(12))] })) },
+    // повна назва підрозділу — окремим рядком під шапкою, щоб довга назва не стискала сусідні колонки
+    ...(unitName(d.unit) ? [{ text: unitName(d.unit), color: C.grey, fontSize: z(8), margin: [0, z(2), 0, 0] }] : []),
     { margin: [0, z(12), 0, 0], layout: 'noBorders', table: { widths: ['*'], body: [[{ fillColor: C.accent, color: '#fff', bold: true, fontSize: z(8.5),
       margin: [z(8), z(4), z(8), z(4)], text: 'Передавати лише через Element черговому медслужби. Інші месенджери суворо заборонені.' }]] } },
     sec('Контакти чергових'),
@@ -1266,7 +1314,7 @@ function fieldHtml(f, path, item) {
   const kind = kindOf(f);
   const ph = f.ph || kind?.ph || '';
   const im = kind?.inputmode ? ` inputmode="${kind.inputmode}"` : '';
-  const caps = kind?.autocapitalize || (f.v === 'unit' ? 'characters' : null);
+  const caps = kind?.autocapitalize || null;
   const textAttrs = ` autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="next" aria-describedby="${id}_err"${caps ? ` autocapitalize="${caps}"` : ''}`;
 
   if (f.t === 'group') {
@@ -1300,6 +1348,9 @@ function fieldHtml(f, path, item) {
   }
   let ctl;
   if (f.t === 'area') ctl = `<textarea id="${id}" data-path="${esc(path)}" rows="2" maxlength="${maxLen(f)}" placeholder="${esc(ph)}" aria-describedby="${id}_err">${esc(v)}</textarea><span class="cnt" data-cnt="${esc(path)}"></span>`;
+  else if (f.t === 'sel') ctl = `<select id="${id}" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" aria-describedby="${id}_err">
+      <option value=""${f.o.includes(v) ? '' : ' selected'}>— оберіть зі списку —</option>
+      ${f.o.map((o, i) => `<option value="${esc(o)}"${v === o ? ' selected' : ''}>${esc(f.ol?.[i] ?? o)}</option>`).join('')}</select>`;
   else if (f.t === 'date') ctl = `<input id="${id}" type="date" data-path="${esc(path)}" value="${esc(v)}" max="${todayISO()}" aria-describedby="${id}_err">`;
   else ctl = `<input id="${id}" type="text" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" maxlength="${maxLen(f)}" placeholder="${esc(ph)}" value="${esc(v)}"${im}${textAttrs}>`;
   return `<div class="fld" data-field="${esc(path)}"${show}${hidden}>${label}${hint}${ctl}${err}</div>`;
@@ -1454,7 +1505,7 @@ function showFieldError(path) {
     const errEl = fld.querySelector(':scope > .err');
     fld.classList.toggle('bad', !!showIt);
     if (errEl) errEl.textContent = showIt ? p.msg : '';
-    fld.querySelectorAll(':scope > input, :scope > textarea, :scope > .withnone > input, :scope > .seg').forEach(el => el.setAttribute('aria-invalid', showIt ? 'true' : 'false'));
+    fld.querySelectorAll(':scope > input, :scope > textarea, :scope > select, :scope > .withnone > input, :scope > .seg').forEach(el => el.setAttribute('aria-invalid', showIt ? 'true' : 'false'));
   }
   // окремі рядки групи підготовки
   const inp = app.querySelector(`[data-path="${CSS.escape(path)}"]`);
@@ -1642,7 +1693,7 @@ function gotoPath(path) {
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const box = el.closest('.fld') || el;
-    const focusable = el.matches('input:not([disabled]),textarea') ? el : box.querySelector('input:not([disabled]):not([type=checkbox]),textarea,.seg-btn') || box.querySelector('input[type=checkbox]');
+    const focusable = el.matches('input:not([disabled]),textarea,select') ? el : box.querySelector('input:not([disabled]):not([type=checkbox]),textarea,select,.seg-btn') || box.querySelector('input[type=checkbox]');
     focusable?.focus({ preventScroll: true });
     box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1600);
   });

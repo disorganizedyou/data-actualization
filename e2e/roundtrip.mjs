@@ -46,8 +46,9 @@ assert.match(await page.textContent('.box.bad h3'), /Потрібно випра
 
 console.log('▶ анкета: заповнення через UI');
 await step(0);
-await fill('unit', FULL.unit.toLowerCase()); // перевіряємо нормалізацію у ВЕЛИКІ
-assert.equal(await page.inputValue('[data-path="unit"]'), FULL.unit);
+assert.equal(await page.$$eval('[data-path="unit"] option', o => o.length), 31, 'список підрозділів: 30 + порожній варіант');
+await page.selectOption('[data-path="unit"]', FULL.unit);
+assert.match(await page.textContent('.brand p'), /2МБ/, 'підрозділ з’являється в шапці');
 await fill('date', FULL.date);
 await fill('author', FULL.author);
 for (const r of ['kb', 's4', 'mp']) {
@@ -193,7 +194,7 @@ const needs = await mdl('#needs'); assert.equal(pageCount(needs.bytes), 1); asse
 await mpage.setInputFiles('#open', resolve(ROOT, 'test/fixtures/legacy_v1.pdf'));
 await mpage.waitForFunction(() => document.querySelectorAll('.tbl tbody tr:not(.det)').length === 2);
 const legacyRow = await mpage.textContent('tr:has(.unit:text("МР")) .st');
-assert.match(legacyRow, /стара форма/); assert.ok(!/помил/.test(legacyRow), 'нові поля старого звіту — не «помилки»');
+assert.match(legacyRow, /стара форма/); assert.match(legacyRow, /1 помилка/, 'нові поля старого звіту — не «помилки»; єдина помилка — підрозділ «МР» не зі списку');
 const regen = await mdl('[data-report]'); assert.match(regen.name, /^Zvit_med_/);
 
 await browser.close();

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KINDS, normalizeData, validateData, errorsOf, warningsOf, progressOf, normCoords, isCoords, normPhone, isNewFieldError } from '../src/shared/validate.mjs';
-import { SECTIONS, STEPS, emptyData, stepOfSection, POINT_FIELDS } from '../src/shared/schema.mjs';
+import { SECTIONS, STEPS, emptyData, stepOfSection, POINT_FIELDS, UNIT_CODES, unitName } from '../src/shared/schema.mjs';
 import { FULL, LEGACY_V1, POINT_V2 } from './fixtures.mjs';
 import { migrate } from '../src/shared/codec.mjs';
 
@@ -71,7 +71,15 @@ test('месенджери: формати', () => {
 test('позивний і підрозділ', () => {
   assert.ok(KINDS.callsign.ok('Сокіл')); assert.ok(KINDS.callsign.ok('Сокіл-2')); assert.ok(!KINDS.callsign.ok('+380671234567'), 'телефон замість позивного');
   assert.ok(!KINDS.callsign.ok('http://x'));
-  assert.equal(KINDS.unit.norm('  2 мб '), '2 МБ'); assert.ok(KINDS.unit.ok('2 МБ')); assert.ok(!KINDS.unit.ok('надто довга назва підрозділу'));
+  assert.equal(KINDS.unit.norm('  2 мб '), '2МБ', 'старий запис зводиться до назви зі списку');
+  assert.equal(KINDS.unit.norm('взв. снайп'), 'ВЗВ СНАЙП'); assert.equal(KINDS.unit.norm('зб 432 оп бпс'), 'ЗБ 432 ОП БПС');
+  assert.ok(KINDS.unit.ok('2МБ')); assert.ok(!KINDS.unit.ok('2 МБ')); assert.ok(!KINDS.unit.ok('надто довга назва підрозділу'));
+  assert.equal(UNIT_CODES.length, 30); assert.equal(new Set(UNIT_CODES).size, 30, 'назви підрозділів унікальні');
+  assert.equal(unitName('2мб'), '2 механізований батальйон'); assert.equal(unitName('МР'), '');
+  const d = clone(); d.unit = 'МР';
+  assert.ok(errs(d).some(x => x.path === 'unit' && /немає у списку/.test(x.msg)), 'підрозділ не зі списку — помилка');
+  d.unit = '3 мб';
+  assert.equal(errs(d).length, 0); assert.equal(normalizeData(d).unit, '3МБ');
 });
 
 test('умовна обов’язковість: примітки з’являються лише за відповідних відповідей', () => {

@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-pvudP2r4tfuT6wKSlj7zoURNMHu6aVpFHdj8tzPhL+s='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-v4O6G+PiUX/BXLCzYNr1Q3ANg3afeewe5oSzDcpjdWg='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Медслужба — плакати зі звітів підрозділів</title>
 <style>
 :root {
@@ -98,7 +98,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-088fcbb";
+const BUILD_VERSION = "v2-37816b7";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -161,6 +161,7 @@ const iconSvg = (name, color = 'currentColor') =>
 //   t        тип: text (типово) | date | sel | seg | area | count | group
 //   v        «вид» значення для нормалізації/перевірки (див. validate.mjs KINDS)
 //   o        варіанти для sel/seg
+//   ol       підписи варіантів для sel (за замовчуванням = o)
 //   req      обов’язкове: true | (item, data) => boolean
 //   showIf   [ключ, [значення…]] — показувати лише коли інше поле має одне зі значень;
 //            або функція (item) => boolean для складніших умов
@@ -173,6 +174,43 @@ const SCHEMA_VERSION = 5;
 const NONE = 'Немає';
 const TITLE = 'Актуалізація даних для медичної служби';
 const FORM_NAME = 'Анкета актуалізації даних';
+
+// Підрозділи: [коротка назва (зберігається у звіті), повна назва]. Щоб додати підрозділ — допишіть рядок.
+const UNITS = [
+  ['1МБ', '1 механізований батальйон'],
+  ['2МБ', '2 механізований батальйон'],
+  ['3МБ', '3 механізований батальйон'],
+  ['МПБ', 'мотопіхотний батальйон'],
+  ['СБ', 'стрілецький батальйон'],
+  ['ТБ', 'танковий батальйон'],
+  ['ББПС', 'батальйон безпілотних систем'],
+  ['САДН', 'самохідний артилерійський дивізіон'],
+  ['ЗРДН', 'зенітний ракетний дивізіон'],
+  ['БАР', 'батарея артилерійської розвідки'],
+  ['БУ', 'батальйон управління'],
+  ['РВБ', 'ремонтно-відновлювальний батальйон'],
+  ['БМЗ', 'батальйон матеріального забезпечення'],
+  ['РБНС', 'рота безпілотних наземних систем'],
+  ['ВЗАБ', 'взвод забезпечення'],
+  ['ВЗВ СНАЙП', 'взвод снайперів'],
+  ['ІСР', 'інженерно-саперна рота'],
+  ['МЕДР', 'медична рота'],
+  ['РЕАБАТР', 'реактивна артилерійська батарея'],
+  ['ВПТРК', 'взвод протитанкових ракетних комплексів'],
+  ['РР', 'розвідувальна рота'],
+  ['РРЕБ', 'рота радіоелектронної боротьби'],
+  ['ВРХБЗ', 'взвод радіаційного, хімічного, біологічного захисту'],
+  ['ВУНППО', 'взвод управління начальника протиповітряної оборони'],
+  ['ВПТЗР', 'відділення протидії технічним засобам розвідки'],
+  ['ГКБС', 'група контролю бойового стресу'],
+  ['ГПСВ', 'група психологічного супроводу та відновлення'],
+  ['ГІ', 'група інструкторів'],
+  ['42ЗР', '42 запасна рота'],
+  ['ЗБ 432 ОП БПС', 'зведений батальйон 432 окремого полку безпілотних систем 11 армійського корпусу'],
+];
+const UNIT_CODES = UNITS.map(u => u[0]);
+// Повна назва підрозділу за короткою ('' — якщо такого в списку немає)
+const unitName = code => (UNITS.find(u => u[0] === String(code ?? '').trim().toUpperCase()) || [])[1] || '';
 
 const OPT = {
   yn: ['Так', 'Ні'],
@@ -280,8 +318,8 @@ const roleSection = r => ({
 // ---- Розділи даних ----
 const SECTIONS = [
   { id: 'general', title: 'Загальні дані', fields: [
-    { k: 'unit', l: 'Підрозділ — коротка назва', pl: 'Підрозділ', v: 'unit', max: 12, req: true, ph: 'МР, 2МБ, 1 РОТА…',
-      hint: 'Як у документах. Великі літери з’являться автоматично.' },
+    { k: 'unit', l: 'Підрозділ', pl: 'Підрозділ', t: 'sel', v: 'unit', req: true,
+      o: UNIT_CODES, ol: UNITS.map(([code, name]) => `${code} — ${name}`) },
     { k: 'date', l: 'Дата актуальності даних', pl: 'Дата', t: 'date', req: true },
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
@@ -409,6 +447,8 @@ function normElement(v) {
   return s.replace(/^@/, '').replace(/:.*$/, '');
 }
 
+const unitKey = s => s.replace(/[\s.\-]/g, '');
+
 const KINDS = {
   phone: { ph: '+380 67 123 45 67', norm: normPhone, ok: isPhone, inputmode: 'tel',
     msg: 'Номер телефону у форматі +380 67 123 45 67 (для України — рівно 9 цифр після +380)' },
@@ -432,8 +472,9 @@ const KINDS = {
     ok: v => /^\d{1,4}$/.test(v) && +v > 0 && +v <= 1440,
     msg: 'Ціле число хвилин від 1 до 1440, наприклад 15' },
   count: { ph: '0', inputmode: 'numeric', max: 3, norm: intNorm, ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
-  unit: { norm: v => squash(v).toUpperCase(), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} .\-\/]{0,11}$/u.test(v) && /[\p{L}\p{N}]/u.test(v),
-    msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс, скісна риска' },
+  // Підрозділ обирають зі списку; значення зі старих звітів («2 мб», «2-МБ») зводимо до назви зі списку
+  unit: { max: 40, norm: v => { const u = squash(v).toUpperCase(); return UNIT_CODES.find(c => unitKey(c) === unitKey(u)) || u; },
+    ok: v => UNIT_CODES.includes(v), msg: 'Оберіть підрозділ зі списку' },
   callsign: { norm: v => squash(v.replace(APOS, '’')), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} ’.\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
     msg: 'Позивний: літери, цифри, пробіл, дефіс, апостроф (без телефонів і посилань)' },
   name: { norm: v => squash(v.replace(APOS, '’')), ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
@@ -512,12 +553,12 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
   const v = item[f.k], p = path + f.k;
   if (f.none && v === NONE) return;
   if (!hasText(v)) {
-    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'seg' || f.t === 'sel' ? 'Оберіть відповідь' : 'Обов’язкове поле');
+    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'sel' ? 'Оберіть зі списку' : f.t === 'seg' ? 'Оберіть відповідь' : 'Обов’язкове поле');
     return;
   }
   if (v.length > maxLen(f)) { push(p, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`); return; }
   if (f.t === 'area' && v.split('\n').length > MAX_AREA_LINES) { push(p, `Забагато рядків (${v.split('\n').length}), максимум ${MAX_AREA_LINES} — скоротіть текст`); return; }
-  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, 'Недопустиме значення — оберіть зі списку'); return; }
+  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, f.t === 'sel' ? `«${v}» немає у списку — оберіть зі списку` : 'Недопустиме значення — оберіть зі списку'); return; }
   if (f.t === 'date' && !validISODate(v)) { push(p, 'Некоректна дата'); return; }
   const kind = kindOf(f);
   if (kind && !kind.ok(v.trim())) push(p, kind.msg);
@@ -1045,6 +1086,8 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     { columns: [{ text: draft ? 'Чернетка звіту' : 'Повний звіт', color: C.ink, bold: true }, { text: status.text, color: status.color, bold: true, alignment: 'right' }] },
     { text: TITLE, font: THEME.head, bold: true, fontSize: z(16), margin: [0, z(2), 0, z(10)] },
     { columns: meta.map(([l, v]) => ({ width: 'auto', margin: [0, 0, z(28), 0], stack: [{ text: l, color: C.grey }, val(v, z(12))] })) },
+    // повна назва підрозділу — окремим рядком під шапкою, щоб довга назва не стискала сусідні колонки
+    ...(unitName(d.unit) ? [{ text: unitName(d.unit), color: C.grey, fontSize: z(8), margin: [0, z(2), 0, 0] }] : []),
     { margin: [0, z(12), 0, 0], layout: 'noBorders', table: { widths: ['*'], body: [[{ fillColor: C.accent, color: '#fff', bold: true, fontSize: z(8.5),
       margin: [z(8), z(4), z(8), z(4)], text: 'Передавати лише через Element черговому медслужби. Інші месенджери суворо заборонені.' }]] } },
     sec('Контакти чергових'),
@@ -1101,7 +1144,7 @@ function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
       { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] },
       ...(warn ? [{ text: warn.toUpperCase(), color: '#fff', background: C.bad, bold: true, fontSize: z(8), margin: [0, z(6), 0, 0] }] : [])] },
     { width: UNIT_W, stack: [
-      { text: 'Підрозділ', color: C.grey, fontSize: z(8), alignment: 'right' },
+      { text: unitName(d.unit) || 'Підрозділ', color: C.grey, fontSize: z(8), alignment: 'right' },
       { text: unit, font: THEME.head, bold: true, fontSize: unitFs, lineHeight: .95, noWrap: true, alignment: 'right' }] },
   ] };
 

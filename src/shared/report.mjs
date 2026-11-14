@@ -1,6 +1,6 @@
 // Повний звіт (PDF) — те, що підрозділ надсилає медслужбі.
 
-import { ROLES, CONTACT, TITLE, FORM_NAME, LEVELS, POINT_GROUPS, POSITION_FIELDS, HEAD_CONTACTS, sectionById, visible, required, dropsDone, noDrops, NONE } from './schema.mjs';
+import { ROLES, CONTACT, TITLE, FORM_NAME, unitName, LEVELS, POINT_GROUPS, POSITION_FIELDS, HEAD_CONTACTS, sectionById, visible, required, dropsDone, noDrops, NONE } from './schema.mjs';
 import { hasText, fmtDate, people, plural } from './text.mjs';
 import { kit, C, THEME, PAGE, ROLE_STYLE, L, T, keepHeadings, starWidth } from './pdfkit.mjs';
 import { pdfEmbedding, makePayload } from './codec.mjs';
@@ -126,6 +126,8 @@ export function buildReport(d, { kind = 'report', created = '', version = '', re
     { columns: [{ text: draft ? 'Чернетка звіту' : 'Повний звіт', color: C.ink, bold: true }, { text: status.text, color: status.color, bold: true, alignment: 'right' }] },
     { text: TITLE, font: THEME.head, bold: true, fontSize: z(16), margin: [0, z(2), 0, z(10)] },
     { columns: meta.map(([l, v]) => ({ width: 'auto', margin: [0, 0, z(28), 0], stack: [{ text: l, color: C.grey }, val(v, z(12))] })) },
+    // повна назва підрозділу — окремим рядком під шапкою, щоб довга назва не стискала сусідні колонки
+    ...(unitName(d.unit) ? [{ text: unitName(d.unit), color: C.grey, fontSize: z(8), margin: [0, z(2), 0, 0] }] : []),
     { margin: [0, z(12), 0, 0], layout: 'noBorders', table: { widths: ['*'], body: [[{ fillColor: C.accent, color: '#fff', bold: true, fontSize: z(8.5),
       margin: [z(8), z(4), z(8), z(4)], text: 'Передавати лише через Element черговому медслужби. Інші месенджери суворо заборонені.' }]] } },
     sec('Контакти чергових'),

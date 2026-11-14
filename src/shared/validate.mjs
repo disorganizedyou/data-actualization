@@ -2,7 +2,7 @@
 // Чиста логіка без DOM — використовується формою, інструментом медслужби й тестами.
 
 import { SECTIONS, LEVELS, ROLES, CONTACT, NONE, SCHEMA_VERSION, POINT_FIELDS, POSITION_FIELDS,
-  groupKeys, visible, required, stepOfSection, listDef, dropsDone, LIST_KEYS, HEAD_CONTACTS, MEDPOINT_FIELD_KEYS } from './schema.mjs';
+  groupKeys, visible, required, stepOfSection, listDef, dropsDone, LIST_KEYS, HEAD_CONTACTS, MEDPOINT_FIELD_KEYS, UNIT_CODES } from './schema.mjs';
 import { hasText, daysBetween, todayISO, plural } from './text.mjs';
 
 export const MAX_IMPORT_STRING = 2000;   // жорсткий ліміт довжини рядка при імпорті з файла/чернетки
@@ -54,6 +54,8 @@ function normElement(v) {
   return s.replace(/^@/, '').replace(/:.*$/, '');
 }
 
+const unitKey = s => s.replace(/[\s.\-]/g, '');
+
 export const KINDS = {
   phone: { ph: '+380 67 123 45 67', norm: normPhone, ok: isPhone, inputmode: 'tel',
     msg: 'Номер телефону у форматі +380 67 123 45 67 (для України — рівно 9 цифр після +380)' },
@@ -77,8 +79,9 @@ export const KINDS = {
     ok: v => /^\d{1,4}$/.test(v) && +v > 0 && +v <= 1440,
     msg: 'Ціле число хвилин від 1 до 1440, наприклад 15' },
   count: { ph: '0', inputmode: 'numeric', max: 3, norm: intNorm, ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
-  unit: { norm: v => squash(v).toUpperCase(), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} .\-\/]{0,11}$/u.test(v) && /[\p{L}\p{N}]/u.test(v),
-    msg: 'Коротка назва: від 1 до 12 символів — літери, цифри, пробіл, крапка, дефіс, скісна риска' },
+  // Підрозділ обирають зі списку; значення зі старих звітів («2 мб», «2-МБ») зводимо до назви зі списку
+  unit: { max: 40, norm: v => { const u = squash(v).toUpperCase(); return UNIT_CODES.find(c => unitKey(c) === unitKey(u)) || u; },
+    ok: v => UNIT_CODES.includes(v), msg: 'Оберіть підрозділ зі списку' },
   callsign: { norm: v => squash(v.replace(APOS, '’')), ok: v => /^[\p{L}\p{N}][\p{L}\p{N} ’.\-]{0,29}$/u.test(v) && !/^\+?\d[\d\s\-()]{6,}$/.test(v),
     msg: 'Позивний: літери, цифри, пробіл, дефіс, апостроф (без телефонів і посилань)' },
   name: { norm: v => squash(v.replace(APOS, '’')), ok: v => v.length >= 2 && v.length <= 60 && /\p{L}|\p{N}/u.test(v), msg: 'Від 2 до 60 символів' },
@@ -157,12 +160,12 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
   const v = item[f.k], p = path + f.k;
   if (f.none && v === NONE) return;
   if (!hasText(v)) {
-    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'seg' || f.t === 'sel' ? 'Оберіть відповідь' : 'Обов’язкове поле');
+    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'sel' ? 'Оберіть зі списку' : f.t === 'seg' ? 'Оберіть відповідь' : 'Обов’язкове поле');
     return;
   }
   if (v.length > maxLen(f)) { push(p, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`); return; }
   if (f.t === 'area' && v.split('\n').length > MAX_AREA_LINES) { push(p, `Забагато рядків (${v.split('\n').length}), максимум ${MAX_AREA_LINES} — скоротіть текст`); return; }
-  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, 'Недопустиме значення — оберіть зі списку'); return; }
+  if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, f.t === 'sel' ? `«${v}» немає у списку — оберіть зі списку` : 'Недопустиме значення — оберіть зі списку'); return; }
   if (f.t === 'date' && !validISODate(v)) { push(p, 'Некоректна дата'); return; }
   const kind = kindOf(f);
   if (kind && !kind.ok(v.trim())) push(p, kind.msg);
