@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KINDS, normalizeData, validateData, errorsOf, warningsOf, progressOf, normCoords, isCoords, normPhone, isNewFieldError } from '../src/shared/validate.mjs';
+import { KINDS, normalizeData, validateData, errorsOf, warningsOf, missingOf, invalidOf, progressOf, normCoords, isCoords, normPhone, isNewFieldError } from '../src/shared/validate.mjs';
 import { SECTIONS, STEPS, emptyData, stepOfSection, POINT_FIELDS, UNIT_CODES, unitName } from '../src/shared/schema.mjs';
 import { FULL, LEGACY_V1, POINT_V2 } from './fixtures.mjs';
 import { migrate } from '../src/shared/codec.mjs';
@@ -313,4 +313,29 @@ test('імпорт: рядки обрізаються до ліміту, nbsp �
 test('дата: неіснуючий календарний день не проходить', () => {
   const d = clone(); d.date = '2026-02-30';
   assert.ok(errs(d).some(x => x.path === 'date'));
+});
+
+test('одиниці при числах прибираються; довгий текст — помилка, а не обрізання', () => {
+  assert.equal(KINDS.min.norm('15 хв'), '15'); assert.equal(KINDS.min.norm('40 хвилин'), '40'); assert.equal(KINDS.min.norm('12min'), '12');
+  assert.equal(KINDS.kg.norm('2,5 кг'), '2,5'); assert.equal(KINDS.kg.norm('3.0kg'), '3');
+  assert.equal(KINDS.count.norm('3 ос.'), '3'); assert.equal(KINDS.count.norm('10 шт'), '10'); assert.equal(KINDS.count.norm('2 особи'), '2');
+  const d = clone(); d.kb_callsign = 'Дуже-довгий-позивний-якого-не-буває-насправді';
+  assert.equal(normalizeData(d).kb_callsign, d.kb_callsign, 'нормалізація не обрізає');
+  assert.ok(errs(d).some(x => x.path === 'kb_callsign'), 'задовгий позивний — помилка');
+});
+
+test('«не заповнено» окремо від «помилка»', () => {
+  const empty = errs(emptyData());
+  assert.ok(empty.length > 30);
+  assert.deepEqual(invalidOf(empty).map(x => x.path), [], 'порожня анкета — лише незаповнене');
+  assert.equal(missingOf(empty).length, empty.length);
+  const d = clone(); d.kb_phone = '123';
+  const e = errs(d);
+  assert.equal(e.length, 1); assert.equal(e[0].kind, 'invalid');
+  d.kb_phone = ''; assert.equal(errs(d)[0].kind, 'missing');
+  // порожня група підготовки та порожній обов’язковий список — теж «не заповнено»
+  const g = clone(); for (const k of Object.keys(g.points[1])) if (k.startsWith('training_')) delete g.points[1][k];
+  assert.equal(errs(g).find(x => x.path === 'points.1.training').kind, 'missing');
+  const l = clone(); l.positions = [];
+  assert.equal(errs(l).find(x => x.path === 'positions').kind, 'missing');
 });

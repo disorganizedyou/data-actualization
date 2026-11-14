@@ -2,7 +2,7 @@
 
 import { STEPS, SECTIONS, NONE, FORM_NAME, CONTACTS_NOTE, SCHEMA_VERSION, LIST_KEYS, sectionById, listDef, listSection, visible, required, emptyData, stepOfSection } from './schema.mjs';
 import { hasText, esc, fmtDate, todayISO, safeFileName, plural } from './text.mjs';
-import { KINDS, kindOf, maxLen, validateData, normalizeData, errorsOf, warningsOf, progressOf, OTHER_MAX } from './validate.mjs';
+import { KINDS, kindOf, maxLen, validateData, normalizeData, errorsOf, warningsOf, missingOf, invalidOf, progressOf, OTHER_MAX } from './validate.mjs';
 import { readPdfBytes, migrate } from './codec.mjs';
 import { buildReport } from './report.mjs';
 import { loadFonts } from './pdfkit.mjs';
@@ -25,17 +25,19 @@ let openCard = firstCards();
 let problemsCache = null;
 let reopened = null;           // { date, kind } — з якого файла підставлено дані (нагадування оновити дату)
 let draftOk = true;            // чи працює сховище браузера
+let nextArmed = null;          // id кроку, на якому «Далі» вже натиснули попри пропуски (друге натискання переходить)
+let notices = [];              // повідомлення вгорі сторінки, що не зникають самі: { id, kind: 'info'|'warn'|'ok', text }
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const app = $('#app');
+const finePointer = () => { try { return matchMedia('(pointer: fine)').matches; } catch { return false; } };
 
 // ---------- доступ до даних за шляхом ----------
 const parsePath = path => {
   const m = path.match(new RegExp(`^(${LIST_KEYS.join('|')})\\.(\\d+)\\.(.+)$`));
   return m ? { list: m[1], idx: +m[2], key: m[3] } : { key: path };
 };
-const getAt = path => { const p = parsePath(path); return (p.list ? data[p.list]?.[p.idx] : data)?.[p.key] ?? ''; };
 const setAt = (path, v) => {
   const p = parsePath(path);
   const o = p.list ? data[p.list][p.idx] : data;
@@ -59,9 +61,13 @@ const ackKey = w => WARN_ACK_PREFIX + w.path + '|' + w.msg;
 const stepErrors = id => errors().filter(p => p.step === id);
 const fieldProblems = path => problems().filter(p => p.path === path);
 const hasAnyData = () => Object.keys(data).some(k => !['v', 'date', ...LIST_KEYS].includes(k)) || LIST_KEYS.some(k => (data[k] || []).some(it => Object.keys(it).length));
+const canDownload = () => !errors().length && warnings().every(w => ack.has(ackKey(w)));
+const dlHintText = () => errors().length ? 'Кнопка стане активною, коли всі поля буде заповнено й помилки виправлено.' : 'Підтвердьте всі зауваження вище.';
 
 // ---------- рендер полів ----------
 const idOf = path => 'f_' + path.replace(/\W/g, '_');
+// Однорядкові поля не обрізаємо мовчки: дозволяємо ввести більше, а задовгий текст показуємо як помилку
+const inputMax = f => Math.max(maxLen(f) * 4, 60);
 function fieldHtml(f, path, item) {
   const id = idOf(path);
   const hidden = !visible(f, item) ? ' hidden' : '';   // атрибут hidden, не клас
@@ -82,7 +88,7 @@ function fieldHtml(f, path, item) {
     const rows = f.items.map(([k, l]) => {
       const pk = `${path}_${k}`, iid = idOf(pk);
       return `<div class="lvl"><label for="${iid}">${esc(l)}</label>
-        <div class="lvl-in"><input id="${iid}" type="text" inputmode="numeric" maxlength="3" data-path="${esc(pk)}" data-kind="count" value="${esc(item?.[`${f.k}_${k}`] ?? '')}" placeholder="0" autocomplete="off" enterkeyhint="next" aria-describedby="${iid}_err"><span>ос.</span></div>
+        <div class="lvl-in"><input id="${iid}" type="text" inputmode="numeric" maxlength="${inputMax({ v: 'count' })}" data-path="${esc(pk)}" data-kind="count" value="${esc(item?.[`${f.k}_${k}`] ?? '')}" placeholder="0" autocomplete="off" enterkeyhint="next" aria-describedby="${iid}_err"><span>ос.</span></div>
         <p class="err" id="${iid}_err"></p></div>`;
     }).join('');
     const ok = `${path}_other`, oid = idOf(ok);
@@ -90,20 +96,22 @@ function fieldHtml(f, path, item) {
       <p class="hint">${esc(f.tip || '')}</p>
       <div class="levels">${rows}</div>
       <label class="lbl" for="${oid}">Інше або уточнення</label>
-      <input id="${oid}" type="text" maxlength="${OTHER_MAX}" data-path="${esc(ok)}" value="${esc(item?.[`${f.k}_other`] ?? '')}" placeholder="наприклад: 1 водій пройшов курс зупинки кровотечі" autocomplete="off" enterkeyhint="next" aria-describedby="${id}_err">
+      <input id="${oid}" type="text" maxlength="${inputMax({ max: OTHER_MAX })}" data-path="${esc(ok)}" value="${esc(item?.[`${f.k}_other`] ?? '')}" placeholder="наприклад: 1 водій пройшов курс зупинки кровотечі" autocomplete="off" enterkeyhint="next" aria-describedby="${id}_err">
       ${err}</fieldset>`;
   }
   if (f.t === 'seg') {
-    const opts = f.o.map(o => `<button type="button" role="radio" aria-checked="${v === o}" class="seg-btn${v === o ? ' on' : ''}" data-val="${esc(o)}">${esc(o)}</button>`).join('');
+    // радіогрупа: одна зупинка Tab на питання (обраний варіант, або перший), вибір стрілками
+    const cur = f.o.includes(v) ? v : f.o[0];
+    const opts = f.o.map(o => `<button type="button" role="radio" aria-checked="${v === o}" tabindex="${o === cur ? 0 : -1}" class="seg-btn${v === o ? ' on' : ''}" data-val="${esc(o)}">${esc(o)}</button>`).join('');
     return `<div class="fld" data-field="${esc(path)}"${show}${hidden}><span class="lbl" id="${id}_l">${esc(f.l)}${star}</span>${hint}
       <div class="seg" role="radiogroup" aria-labelledby="${id}_l" aria-describedby="${id}_err" data-path="${esc(path)}" id="${id}">${opts}</div>${err}</div>`;
   }
   if (f.none) {
     const none = v === NONE;
     return `<div class="fld" data-field="${esc(path)}"${hidden}>
-      <span class="lbl" id="${id}_l">${f.icon ? `<i class="ico">${iconSvg(f.icon)}</i>` : ''}${esc(f.l)}${star}</span>
+      <label class="lbl" for="${id}">${f.icon ? `<i class="ico" aria-hidden="true">${iconSvg(f.icon)}</i>` : ''}${esc(f.l)}${star}</label>${hint}
       <div class="withnone">
-        <input id="${id}" type="text" aria-labelledby="${id}_l" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" maxlength="${maxLen(f)}" placeholder="${esc(ph)}" value="${none ? '' : esc(v)}"${none ? ' disabled' : ''}${im}${textAttrs.replace(/ autocapitalize="[^"]*"/, '')} autocapitalize="off">
+        <input id="${id}" type="text" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" maxlength="${inputMax(f)}" placeholder="${esc(ph)}" value="${none ? '' : esc(v)}"${none ? ' disabled' : ''}${im}${textAttrs.replace(/ autocapitalize="[^"]*"/, '')} autocapitalize="off">
         <label class="none${none ? ' on' : ''}"><input type="checkbox" data-none="${esc(path)}"${none ? ' checked' : ''}> ${NONE}</label>
       </div>${err}</div>`;
   }
@@ -113,15 +121,17 @@ function fieldHtml(f, path, item) {
       <option value=""${f.o.includes(v) ? '' : ' selected'}>— оберіть зі списку —</option>
       ${f.o.map((o, i) => `<option value="${esc(o)}"${v === o ? ' selected' : ''}>${esc(f.ol?.[i] ?? o)}</option>`).join('')}</select>`;
   else if (f.t === 'date') ctl = `<input id="${id}" type="date" data-path="${esc(path)}" value="${esc(v)}" max="${todayISO()}" aria-describedby="${id}_err">`;
-  else ctl = `<input id="${id}" type="text" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" maxlength="${maxLen(f)}" placeholder="${esc(ph)}" value="${esc(v)}"${im}${textAttrs}>`;
+  else ctl = `<input id="${id}" type="text" data-path="${esc(path)}" data-kind="${esc(f.v || '')}" maxlength="${inputMax(f)}" placeholder="${esc(ph)}" value="${esc(v)}"${im}${textAttrs}>`;
   return `<div class="fld" data-field="${esc(path)}"${show}${hidden}>${label}${hint}${ctl}${err}</div>`;
 }
 
+// Стан картки: червоне — помилки введення; сіре — лишилося заповнити; зелене — усе гаразд
 const cardStatus = (listKey, i) => {
-  const e = errors().filter(p => p.path.startsWith(`${listKey}.${i}.`)).length;
-  if (e) return `<span class="badge bad">${e} ${plural(e, 'помилка', 'помилки', 'помилок')}</span>`;
-  const seen = attempted.has(stepOfSection(listSection(listKey)).id) || Object.keys(data[listKey][i]).length > 2;
-  return seen ? '<span class="badge ok">✓ заповнено</span>' : '';
+  const mine = errors().filter(p => p.path.startsWith(`${listKey}.${i}.`));
+  const bad = invalidOf(mine).length, todo = missingOf(mine).length;
+  if (bad) return `<span class="badge bad">${bad} ${plural(bad, 'помилка', 'помилки', 'помилок')}</span>`;
+  if (todo) return `<span class="badge todo">лишилося заповнити: ${todo}</span>`;
+  return '<span class="badge ok">✓ заповнено</span>';
 };
 
 function cardHtml(listKey, i) {
@@ -150,13 +160,14 @@ function listHtml(s) {
   const l = s.list, on = visible({ showIf: l.showIf }, data);
   const items = data[l.key].map((_, i) => cardHtml(l.key, i)).join('');
   return `<div class="list" data-list="${l.key}"${on ? '' : ' hidden'}>${items}
+    <p class="err" data-list-err="${l.key}"></p>
     <button type="button" class="btn add" data-add="${l.key}">+ Додати ${esc(l.addText)}</button></div>`;
 }
 
 function sectionHtml(s) {
   const fields = s.fields ? `<div class="fields">${s.fields.map(f => fieldHtml(f, f.k, data)).join('')}</div>` : '';
-  // пояснення про службові контакти — у кожному розділі чергового (а не на рівні кроку: на кроці «Медичні пункти»
-  // поруч є контакти начальників, для яких воно не діє)
+  // пояснення про службові контакти — у кожному розділі чергового (а не на рівні кроку: на кроці «Медичний пункт»
+  // поруч є контакти начальника, для якого воно не діє)
   const lead = s.role ? `<p class="lead">${esc(CONTACTS_NOTE)}</p>` : '';
   const note = s.note ? `<p class="note">${esc(s.note)}</p>` : '';
   const hint = s.hint ? `<p class="hint">${esc(s.hint)}</p>` : '';
@@ -167,11 +178,14 @@ function sectionHtml(s) {
 
 // ---------- крок перевірки ----------
 const itemPrefix = p => p.item != null ? `${listDef(p.path.split('.')[0]).item} ${p.item + 1} · ` : '';
+const byStep = list => STEPS.filter(s => !s.final).map(s => ({ s, e: list.filter(p => p.step === s.id) })).filter(x => x.e.length);
+const problemList = list => byStep(list).map(({ s, e }) => `<h4>${esc(s.title)} <span class="badge ${e[0].kind === 'missing' ? 'todo' : 'bad'}">${e.length}</span></h4>
+  <ul>${e.map(p => `<li><button type="button" class="link" data-goto="${esc(p.path)}">${esc(itemPrefix(p))}${esc(p.label)}: <span>${esc(p.msg)}</span></button></li>`).join('')}</ul>`).join('');
+
 function checkHtml() {
   const errs = errors(), warns = warnings(), pr = progressOf(normalizeData(data));
-  const byStep = STEPS.filter(s => !s.final).map(s => ({ s, e: errs.filter(p => p.step === s.id) })).filter(x => x.e.length);
-  const unacked = warns.filter(w => !ack.has(ackKey(w)));
-  const canDownload = !errs.length && !unacked.length;
+  const bad = invalidOf(errs), todo = missingOf(errs);
+  const can = canDownload();
   const pts = (data.points || []).length, pos = data.drops === 'Так' ? (data.positions || []).length : 0;
   const staleDate = reopened && data.date === reopened.date && data.date !== todayISO();
   return `<section class="sec check">
@@ -185,17 +199,18 @@ function checkHtml() {
     ${staleDate ? `<div class="box warn"><h3>Дата актуальності — з попереднього файла</h3>
       <p>Дані підставлено з ${reopened.kind === 'draft' ? 'чернетки' : 'звіту'} від ${esc(fmtDate(reopened.date))}. Якщо ви перевірили й оновили дані сьогодні — поставте сьогоднішню дату.</p>
       <button type="button" class="btn" id="today">Поставити сьогоднішню дату (${esc(fmtDate(todayISO()))})</button></div>` : ''}
-    ${errs.length ? `<div class="box bad"><h3>Потрібно виправити: ${errs.length} ${plural(errs.length, 'помилка', 'помилки', 'помилок')}</h3>
-      <p>Звіт можна завантажити лише після виправлення всіх помилок. Натисніть на рядок, щоб перейти до поля.</p>
-      ${byStep.map(({ s, e }) => `<h4>${esc(s.title)} <span class="badge bad">${e.length}</span></h4><ul>${e.map(p => `<li><button type="button" class="link" data-goto="${esc(p.path)}">${esc(itemPrefix(p))}${esc(p.label)}: <span>${esc(p.msg)}</span></button></li>`).join('')}</ul>`).join('')}
-    </div>` : `<div class="box ok"><h3>Помилок немає</h3><p>Усі обов’язкові поля заповнені, формати перевірено.</p></div>`}
+    ${bad.length ? `<div class="box bad"><h3>Потрібно виправити: ${bad.length} ${plural(bad.length, 'помилка', 'помилки', 'помилок')}</h3>
+      <p>Ці поля заповнено неправильно. Натисніть на рядок, щоб перейти до поля.</p>${problemList(bad)}</div>` : ''}
+    ${todo.length ? `<div class="box warn"><h3>Лишилося заповнити: ${todo.length} ${plural(todo.length, 'поле', 'поля', 'полів')}</h3>
+      <p>Натисніть на рядок, щоб перейти до поля.</p>${problemList(todo)}</div>` : ''}
+    ${!errs.length ? `<div class="box ok"><h3>Усе заповнено, помилок немає</h3><p>Усі обов’язкові поля заповнені, формати перевірено.</p></div>` : ''}
     ${warns.length ? `<div class="box warn" id="warnbox"><h3>Перевірте: ${warns.length} ${plural(warns.length, 'зауваження', 'зауваження', 'зауважень')}</h3>
       <p>Це не помилки, але підтвердіть, що дані правильні, або виправте їх.</p>
       <ul>${warns.map(w => `<li><label class="ackl"><input type="checkbox" data-ack="${esc(ackKey(w))}"${ack.has(ackKey(w)) ? ' checked' : ''}> <span>${esc(itemPrefix(w))}${esc(w.label)}: ${esc(w.msg)}</span></label> <button type="button" class="link small" data-goto="${esc(w.path)}">до поля</button></li>`).join('')}</ul>
     </div>` : ''}
     <div class="dl">
-      <button type="button" class="btn primary big" id="report"${canDownload ? '' : ' disabled'}>Завантажити звіт PDF</button>
-      <p class="hint" id="dlhint"${canDownload ? ' hidden' : ''}>${errs.length ? 'Кнопка стане активною після виправлення помилок.' : 'Підтвердьте всі зауваження вище.'}</p>
+      <button type="button" class="btn primary big" id="report"${can ? '' : ' disabled'}>Завантажити звіт PDF</button>
+      <p class="hint" id="dlhint"${can ? ' hidden' : ''}>${esc(dlHintText())}</p>
       <p class="rule"><b>Готовий PDF передавайте виключно через Element</b> черговому медичної служби. Передача будь-якими іншими месенджерами суворо заборонена.</p>
       <div class="draftrow"><button type="button" class="btn" id="draft">Зберегти чернетку PDF</button>
         <p class="hint">Чернетку можна відкрити в цій формі пізніше й продовжити. Для подання вона не придатна — на ній є позначка «ЧЕРНЕТКА».</p></div>
@@ -204,16 +219,39 @@ function checkHtml() {
 }
 
 // ---------- каркас ----------
+// Стан кроку в навігації: червоне — помилки введення (завжди); сіре — незаповнене (після спроби пройти крок)
+function stepState(s, i) {
+  if (s.final) return { cls: i === step ? 'cur' : '', badge: '' };
+  const mine = errors().filter(p => p.step === s.id);
+  const bad = invalidOf(mine).length, todo = attempted.has(s.id) ? missingOf(mine).length : 0;
+  const cls = i === step ? 'cur' : bad ? 'bad' : todo ? 'todo' : attempted.has(s.id) ? 'ok' : '';
+  const badge = bad ? `<b class="bad" title="Помилок: ${bad}">${bad}</b>` : todo ? `<b class="todo" title="Не заповнено: ${todo}">${todo}</b>` : '';
+  return { cls, badge };
+}
+const progressHtml = pr => `<span class="long">Заповнено </span>${pr.done} з ${pr.total}`;
+
+function noticesHtml() {
+  return notices.map(n => `<div class="box ${n.kind} notice" data-notice="${esc(n.id)}" role="status">
+    <p>${esc(n.text)}</p><button type="button" class="x" data-dismiss="${esc(n.id)}" aria-label="Закрити повідомлення">✕</button></div>`).join('');
+}
+function addNotice(id, kind, text) {
+  notices = [...notices.filter(n => n.id !== id), { id, kind, text }];
+  const box = $('#notices', app); if (box) box.innerHTML = noticesHtml();
+}
+function dropNotice(id) {
+  notices = notices.filter(n => n.id !== id);
+  const box = $('#notices', app); if (box) box.innerHTML = noticesHtml();
+}
+
 function render({ keepScroll = false } = {}) {
   const y = window.scrollY;
   const st = STEPS[step];
-  const errs = errors();
   const pr = progressOf(normalizeData(data));
   const stepsNav = STEPS.map((s, i) => {
-    const e = s.final ? 0 : errs.filter(p => p.step === s.id).length;
-    const state = i === step ? 'cur' : s.final ? '' : attempted.has(s.id) ? (e ? 'bad' : 'ok') : '';
-    return `<button type="button" class="stp ${state}" data-step="${i}" aria-current="${i === step ? 'step' : 'false'}"><i>${s.final ? '✓' : i + 1}</i><span>${esc(s.short)}</span>${e && attempted.has(s.id) ? `<b>${e}</b>` : ''}</button>`;
+    const { cls, badge } = stepState(s, i);
+    return `<button type="button" class="stp ${cls}" data-step="${i}" aria-current="${i === step ? 'step' : 'false'}"><i>${s.final ? '✓' : i + 1}</i><span>${esc(s.short)}</span>${badge}</button>`;
   }).join('');
+  const armed = nextArmed === st.id;
   app.innerHTML = `
   <header class="bar">
     <div class="bar-in">
@@ -227,14 +265,16 @@ function render({ keepScroll = false } = {}) {
     <nav class="steps" aria-label="Кроки">${stepsNav}</nav>
   </header>
   <main class="main">
+    <div id="notices" class="notices">${noticesHtml()}</div>
     ${step === 0 ? introHtml() : ''}
-    <h2 class="h2"><small>Крок ${step + 1} з ${STEPS.length}</small>${esc(st.title)}</h2>
+    <h2 class="h2" tabindex="-1"><small>Крок ${step + 1} з ${STEPS.length}</small>${esc(st.title)}</h2>
     ${st.final ? checkHtml() : st.sections.map(id => sectionHtml(sectionById(id))).join('')}
   </main>
   <footer class="nav">
+    <p class="navnote" id="navnote"${armed ? '' : ' hidden'}>${armed ? esc(armedText(st.id)) : ''}</p>
     <button type="button" class="btn" id="prev"${step === 0 ? ' disabled' : ''}>← Назад</button>
-    <span class="nav-mid">${pr.done} / ${pr.total}</span>
-    ${st.final ? '' : `<button type="button" class="btn primary" id="next">${step === STEPS.length - 2 ? 'До перевірки →' : 'Далі →'}</button>`}
+    <span class="nav-mid">${progressHtml(pr)}</span>
+    ${st.final ? '' : `<button type="button" class="btn primary" id="next">${nextLabel(armed)}</button>`}
   </footer>`;
   $$('textarea', app).forEach(counter);
   refreshErrors();
@@ -243,12 +283,18 @@ function render({ keepScroll = false } = {}) {
   if (nav && cur) nav.scrollLeft = Math.max(0, cur.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2);
   if (keepScroll) window.scrollTo({ top: y }); else window.scrollTo({ top: 0 });
 }
+const nextLabel = armed => (step === STEPS.length - 2 ? 'До перевірки' : 'Далі') + (armed ? ' попри пропуски →' : ' →');
+function armedText(id) {
+  const mine = stepErrors(id), bad = invalidOf(mine).length, todo = missingOf(mine).length;
+  const parts = [todo && `${todo} ${plural(todo, 'незаповнене поле', 'незаповнені поля', 'незаповнених полів')}`, bad && `${bad} ${plural(bad, 'помилка', 'помилки', 'помилок')}`].filter(Boolean);
+  return `На цьому кроці: ${parts.join(', ')}. Виправте зараз або натисніть ще раз, щоб перейти далі.`;
+}
 
 function introHtml() {
   return `<details class="intro"><summary>Як працює анкета</summary>
     <ol>
       <li>Заповніть кроки по черзі. Поля з <span class="req">*</span> обов’язкові. Якщо щось не так — поле підсвітиться й з’явиться підказка.</li>
-      <li>На останньому кроці форма покаже все, що треба виправити. Звіт PDF можна буде завантажити лише тоді, коли помилок не залишиться.</li>
+      <li>На останньому кроці форма покаже все, що треба заповнити чи виправити. Звіт PDF можна буде завантажити лише тоді, коли всі поля буде заповнено й помилок не залишиться.</li>
       <li>Готовий PDF надішліть черговому медслужби <b>лише через Element</b>. Інші месенджери заборонені.</li>
       <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт або чернетку — дані підставляться у форму.</li>
       <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}, якщо браузер це дозволяє. Копія видаляється після завантаження звіту або кнопкою «Очистити».</li>
@@ -280,13 +326,28 @@ function showFieldError(path) {
 function refreshErrors() {
   $$('[data-field]', app).forEach(el => showFieldError(el.dataset.field));
   $$('.lvl [data-path], .group > input[data-path]', app).forEach(el => showFieldError(el.dataset.path));
+  // помилка самого списку (наприклад, «Так», але всі позиції видалено)
+  $$('[data-list-err]', app).forEach(el => {
+    const p = errors().find(x => x.path === el.dataset.listErr);
+    el.textContent = p && attempted.has(p.step) ? p.msg : '';
+  });
   // статуси карток і кроків без повного перерендеру
   $$('.card', app).forEach(c => { const b = c.querySelector('.card-t'); const old = b.querySelector('.badge'); const html = cardStatus(c.dataset.card, +c.dataset.idx); if (old) old.outerHTML = html || ''; else if (html) b.querySelector('.ttl').insertAdjacentHTML('afterend', html); });
-  const errs = errors();
-  $$('.stp', app).forEach((b, i) => { const s = STEPS[i]; if (s.final || i === step) return; const e = errs.filter(p => p.step === s.id).length; b.className = `stp ${attempted.has(s.id) ? (e ? 'bad' : 'ok') : ''}`; const bb = b.querySelector('b'); if (e && attempted.has(s.id)) { if (bb) bb.textContent = e; else b.insertAdjacentHTML('beforeend', `<b>${e}</b>`); } else if (bb) bb.remove(); });
+  $$('.stp', app).forEach((b, i) => {
+    const { cls, badge } = stepState(STEPS[i], i);
+    b.className = `stp ${cls}`;
+    b.querySelector('b')?.remove();
+    if (badge) b.insertAdjacentHTML('beforeend', badge);
+  });
   const pr = progressOf(normalizeData(data));
   const bar = $('.prog i', app); if (bar) bar.style.width = `${pr.total ? Math.round(100 * pr.done / pr.total) : 0}%`;
-  const mid = $('.nav-mid', app); if (mid) mid.textContent = `${pr.done} / ${pr.total}`;
+  const mid = $('.nav-mid', app); if (mid) mid.innerHTML = progressHtml(pr);
+  // «Далі попри пропуски»: якщо пропуски вже виправлено — повертаємо звичайну кнопку
+  if (nextArmed === STEPS[step].id) {
+    const note = $('#navnote', app), btn = $('#next', app);
+    if (!stepErrors(nextArmed).length) { nextArmed = null; if (note) note.hidden = true; if (btn) btn.textContent = nextLabel(false); }
+    else if (note) note.textContent = armedText(nextArmed);
+  }
 }
 
 // Показ/приховування умовних полів. Значення прихованих полів лишаються в data (на випадок, якщо відповідь повернуть),
@@ -310,9 +371,45 @@ function refreshVisibility(root) {
   problemsCache = null;
 }
 
+// Список, що став видимим і має бути непорожнім (позиції для скидів після «Так»), одразу отримує першу картку
+function ensureListItems() {
+  let added = null;
+  for (const k of LIST_KEYS) {
+    const def = listDef(k);
+    if ((def.min || 0) >= 1 && visible({ showIf: def.showIf }, data) && Array.isArray(data[k]) && !data[k].length) {
+      data[k].push({}); openCard[k] = 0; added = k; problemsCache = null;
+    }
+  }
+  return added;
+}
+
 function counter(el) {
   const c = app.querySelector(`[data-cnt="${CSS.escape(el.dataset.path)}"]`);
   if (c) c.textContent = el.value.length >= el.maxLength * .7 ? `${el.value.length} / ${el.maxLength}` : '';
+}
+
+const firstFocusable = root => root.querySelector('input:not([disabled]):not([type=checkbox]):not([type=file]), textarea, select, .seg-btn[tabindex="0"]');
+
+// Вибір варіанта в перемикачі (клік мишею, дотик, стрілки чи пробіл з клавіатури)
+function selectSeg(btn, { keyboard = false } = {}) {
+  if (btn.classList.contains('on')) return;               // повторний вибір обраного — нічого не змінює
+  const seg = btn.closest('.seg'), path = seg.dataset.path;
+  $$('.seg-btn', seg).forEach(b => { b.classList.remove('on'); b.setAttribute('aria-checked', 'false'); b.tabIndex = -1; });
+  btn.classList.add('on'); btn.setAttribute('aria-checked', 'true'); btn.tabIndex = 0;
+  setAt(path, btn.dataset.val);
+  touched.add(path);
+  const added = ensureListItems();
+  if (added) {
+    render({ keepScroll: true });
+    const card = $(`.card[data-card="${added}"][data-idx="0"]`, app);
+    if (keyboard) $(`.seg[data-path="${CSS.escape(path)}"] .seg-btn.on`, app)?.focus();
+    else if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); firstFocusable(card)?.focus({ preventScroll: true }); }
+  } else {
+    refreshVisibility(btn.closest('.card-b') || app);
+    if (!parsePath(path).list) refreshVisibility(app);
+    refreshErrors();
+  }
+  scheduleAutosave();
 }
 
 // ---------- події ----------
@@ -328,6 +425,7 @@ app.addEventListener('input', e => {
 });
 app.addEventListener('change', e => {
   const el = e.target;
+  if (el.id === 'open') { openPdf(el.files[0]); el.value = ''; return; }
   if (el.dataset.path) {
     const kind = KINDS[el.dataset.kind];
     if (kind?.norm && hasText(el.value)) { el.value = kind.norm(el.value); setAt(el.dataset.path, el.value); }
@@ -351,46 +449,33 @@ app.addEventListener('change', e => {
   if (el.dataset.ack) {
     if (el.checked) ack.add(el.dataset.ack); else ack.delete(el.dataset.ack);
     // без перерендеру — лише стан кнопки звіту
-    const can = !errors().length && warnings().every(w => ack.has(ackKey(w)));
+    const can = canDownload();
     const btn = $('#report', app), hint = $('#dlhint', app);
     if (btn) btn.disabled = !can;
-    if (hint) { hint.hidden = can; hint.textContent = errors().length ? 'Кнопка стане активною після виправлення помилок.' : 'Підтвердьте всі зауваження вище.'; }
+    if (hint) { hint.hidden = can; hint.textContent = dlHintText(); }
   }
 });
+// Залишене порожнім поле не «сваримо» одразу: порожні обов’язкові показуємо після спроби пройти крок,
+// а неправильно заповнене — щойно людина вийшла з поля
 app.addEventListener('focusout', e => {
   const el = e.target;
-  if (el.dataset?.path && !touched.has(el.dataset.path)) { touched.add(el.dataset.path); refreshErrors(); }
+  if (el.dataset?.path && !touched.has(el.dataset.path) && hasText(el.value)) { touched.add(el.dataset.path); refreshErrors(); }
 });
 app.addEventListener('click', e => {
   const t = e.target.closest('button, .seg-btn');
   if (!t) return;
-  if (t.classList.contains('seg-btn')) {
-    if (t.classList.contains('on')) return;              // повторний дотик до обраного — нічого не змінює
-    const seg = t.closest('.seg'), path = seg.dataset.path;
-    $$('.seg-btn', seg).forEach(b => { b.classList.remove('on'); b.setAttribute('aria-checked', 'false'); });
-    t.classList.add('on'); t.setAttribute('aria-checked', 'true'); setAt(path, t.dataset.val);
-    touched.add(path);
-    refreshVisibility(t.closest('.card-b') || app);
-    if (listDef('positions').showIf[0] === path) refreshVisibility(app);
-    refreshErrors(); scheduleAutosave();
-    return;
-  }
+  if (t.classList.contains('seg-btn')) { selectSeg(t, { keyboard: e.detail === 0 }); return; }
   if (t.dataset.step != null) { goStep(+t.dataset.step); return; }
-  if (t.id === 'next') {
-    const cur = STEPS[step];
-    attempted.add(cur.id);
-    const errs = stepErrors(cur.id);
-    if (errs.length) toast(`На кроці «${cur.title}» лишилося ${errs.length} ${plural(errs.length, 'помилка', 'помилки', 'помилок')}. Виправте їх зараз (← Назад) або пізніше — на кроці «Перевірка та звіт».`, 6000);
-    goStep(step + 1); return;
-  }
+  if (t.id === 'next') { onNext(); return; }
   if (t.id === 'prev') { goStep(step - 1); return; }
+  if (t.dataset.dismiss) { dropNotice(t.dataset.dismiss); return; }
   if (t.id === 'today') { data.date = todayISO(); dirty = true; problemsCache = null; touched.add('date'); render({ keepScroll: true }); toast(`Дату оновлено: ${fmtDate(data.date)}.`); scheduleAutosave(); return; }
   if (t.dataset.add) {
     const key = t.dataset.add; data[key].push({}); openCard[key] = data[key].length - 1; dirty = true; problemsCache = null;
     render({ keepScroll: true });
     const card = $(`.card[data-card="${key}"][data-idx="${openCard[key]}"]`, app);
     card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    card?.querySelector('input,textarea,button.seg-btn')?.focus({ preventScroll: true });
+    if (card) firstFocusable(card)?.focus({ preventScroll: true });
     scheduleAutosave(); return;
   }
   if (t.dataset.del) {
@@ -416,8 +501,26 @@ app.addEventListener('click', e => {
   if (t.id === 'draft') { download('draft'); return; }
   if (t.id === 'clear') { if (confirm('Очистити всі поля й видалити збережену чернетку з цього пристрою?')) { reset(); clearDraft(); toast('Форму очищено.'); } return; }
 });
-app.addEventListener('keydown', e => { if (e.target.id === 'openl' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#open').click(); } });
-app.addEventListener('change', e => { if (e.target.id === 'open') { openPdf(e.target.files[0]); e.target.value = ''; } });
+app.addEventListener('keydown', e => {
+  if (e.target.id === 'openl' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#open').click(); return; }
+  // перемикач: стрілки переносять фокус на сусідній варіант і обирають його (як звичайні радіокнопки)
+  if (e.target.classList?.contains('seg-btn') && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+    e.preventDefault();
+    const btns = $$('.seg-btn', e.target.closest('.seg')), i = btns.indexOf(e.target);
+    const next = btns[(i + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1) + btns.length) % btns.length];
+    next.focus(); selectSeg(next, { keyboard: true });
+  }
+});
+
+// «Далі»: якщо на кроці є пропуски — спершу показуємо їх і лишаємось; друге натискання переходить
+function onNext() {
+  const cur = STEPS[step];
+  attempted.add(cur.id);
+  const errs = stepErrors(cur.id);
+  if (!errs.length || nextArmed === cur.id) { goStep(step + 1); return; }
+  nextArmed = cur.id;
+  gotoPath(errs[0].path, { flash: true });
+}
 
 // після видалення елемента списку зсуваємо індекси у touched/ack
 function shiftPaths(key, removed) {
@@ -437,26 +540,48 @@ function updateCardTitle(key, i) {
   card.innerHTML = `${esc(hasText(it.name) ? it.name.trim() : '')}${hasText(it.coords) ? `<small>${esc(it.coords)}</small>` : ''}`;
 }
 
-function goStep(i) {
+// ---------- кроки та історія браузера ----------
+// Кожен перехід — запис в історії, тож кнопки браузера «Назад»/«Вперед» ходять між кроками
+const pushHistory = () => { try { history.pushState({ step }, ''); } catch { /* перегляд без History API — працюємо без історії */ } };
+const replaceHistory = () => { try { history.replaceState({ step }, ''); } catch { /* так само */ } };
+
+function goStep(i, { push = true, focus = true } = {}) {
   if (i < 0 || i >= STEPS.length) return;
   if (i === STEPS.length - 1) STEPS.forEach(s => { if (!s.final) attempted.add(s.id); });
-  step = i; render(); scheduleAutosave();
+  const changed = i !== step;
+  step = i; nextArmed = null; render(); scheduleAutosave();
+  if (push && changed) pushHistory();
+  if (focus) focusStepStart();
 }
-function gotoPath(path) {
+addEventListener('popstate', e => { const s = e.state?.step; if (Number.isInteger(s) && s >= 0 && s < STEPS.length) goStep(s, { push: false }); });
+
+// Після переходу на крок: на комп’ютері — курсор у перше поле; на телефоні — на заголовок (щоб не вискакувала клавіатура)
+function focusStepStart() {
+  const h = $('.h2', app);
+  const first = !STEPS[step].final && finePointer() ? firstFocusable($('.main', app)) : null;
+  (first || h)?.focus({ preventScroll: true });
+}
+
+function gotoPath(path, { flash = true } = {}) {
   const p = parsePath(path);
   const sectionId = p.list ? listSection(p.list)
     : SECTIONS.find(s => s.fields?.some(f => f.k === path))?.id || listSection(path) || null;
   const st = STEPS.findIndex(s => s.sections.includes(sectionId));
   if (p.list) openCard[p.list] = p.idx;
-  if (st >= 0) { step = st; render(); }
+  if (st >= 0) {
+    const changed = st !== step;
+    if (changed) nextArmed = null;
+    step = st; render({ keepScroll: !changed });
+    if (changed) pushHistory();
+  }
   requestAnimationFrame(() => {
     const el = app.querySelector(`[data-path="${CSS.escape(path)}"]`) || app.querySelector(`[data-field="${CSS.escape(path)}"]`) || app.querySelector(`[data-list="${CSS.escape(path)}"]`);
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const box = el.closest('.fld') || el;
-    const focusable = el.matches('input:not([disabled]),textarea,select') ? el : box.querySelector('input:not([disabled]):not([type=checkbox]),textarea,select,.seg-btn') || box.querySelector('input[type=checkbox]');
+    const focusable = el.matches('input:not([disabled]),textarea,select') ? el : firstFocusable(box) || box.querySelector('.seg-btn') || box.querySelector('input[type=checkbox]');
     focusable?.focus({ preventScroll: true });
-    box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1600);
+    if (flash) { box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1600); }
   });
 }
 
@@ -466,7 +591,7 @@ function scheduleAutosave() { clearTimeout(saveTimer); saveTimer = setTimeout(sa
 function saveDraft() {
   clearTimeout(saveTimer);
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ saved: new Date().toISOString(), step, attempted: [...attempted], data })); draftOk = true; }
-  catch { if (draftOk) { draftOk = false; toast('Браузер не дозволяє зберігати робочу копію на цьому пристрої. Зберігайте чернетку PDF, щоб не втратити введене.', 7000); } }
+  catch { if (draftOk) { draftOk = false; addNotice('nostore', 'warn', 'Браузер не дозволяє зберігати робочу копію на цьому пристрої. Зберігайте чернетку PDF, щоб не втратити введене.'); } }
 }
 function clearDraft() { clearTimeout(saveTimer); try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } }
 function loadDraft() {
@@ -492,13 +617,14 @@ function reset(d) {
   }
   if (!hasText(data.date) && !d) data.date = todayISO();
   step = 0; dirty = false; problemsCache = null; attempted = new Set(); touched = new Set(); ack = new Set(); openCard = firstCards(); reopened = null;
+  nextArmed = null; notices = [];
+  ensureListItems();
   render();
 }
 
 // ---------- PDF ----------
 async function download(kind) {
-  const errs = errors(), unacked = warnings().filter(w => !ack.has(ackKey(w)));
-  if (kind === 'report' && (errs.length || unacked.length)) { toast('Спочатку виправте помилки й підтвердьте зауваження.'); return; }
+  if (kind === 'report' && !canDownload()) { toast('Спочатку заповніть усі поля, виправте помилки й підтвердьте зауваження.'); return; }
   const btn = $(`#${kind}`, app), text = btn.textContent;
   btn.disabled = true; btn.textContent = 'Створюю…';
   try {
@@ -509,8 +635,10 @@ async function download(kind) {
     const name = safeFileName([kind === 'draft' ? 'Chernetka' : 'Zvit_med', d.unit?.toUpperCase(), d.date].filter(hasText).join('_')) + '.pdf';
     saveBlob(blob, name);
     dirty = false;
-    if (kind === 'report') clearDraft();     // звіт сформовано — робоча копія на пристрої більше не потрібна
-    toast(kind === 'draft' ? `Чернетку збережено: ${name}` : `Звіт збережено: ${name}. Надішліть його черговому медслужби через Element.`, 7000);
+    if (kind === 'report') {
+      clearDraft();     // звіт сформовано — робоча копія на пристрої більше не потрібна
+      addNotice('saved', 'ok', `Звіт збережено: ${name}. Надішліть його черговому медслужби через Element.`);
+    } else toast(`Чернетку збережено: ${name}`, 7000);
   } catch (e) { console.error(e); alert('Не вдалося створити PDF: ' + (e && e.message || e)); }
   finally { btn.textContent = text; render({ keepScroll: true }); }
 }
@@ -539,17 +667,17 @@ async function openPdf(file) {
         : ' Це файл попередньої версії форми — дані перенесено автоматично.';
       if (from < 3) msg += ' Питання про медичне майно об’єднано в одне — перевірте відповідь.';
     }
-    if (errs.length) msg += ` Залишилося виправити: ${errs.length} ${plural(errs.length, 'помилку', 'помилки', 'помилок')}.`;
+    if (errs.length) msg += ` Лишилося заповнити або виправити: ${errs.length} ${plural(errs.length, 'поле', 'поля', 'полів')}.`;
     delete data.migratedFrom;
     goStep(STEPS.length - 1);
-    toast(msg, 9000);
+    addNotice('opened', from ? 'warn' : 'info', msg);
   } catch (e) { alert(e && e.message || 'Не вдалося прочитати файл.'); }
 }
 addEventListener('dragover', e => e.preventDefault());
 addEventListener('drop', e => { e.preventDefault(); openPdf(e.dataTransfer.files[0]); });
 addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
-// ---------- сповіщення ----------
+// ---------- короткі сповіщення ----------
 let toastTimer = null;
 function toast(msg, ms = 5000) {
   const t = $('#toast'); t.textContent = msg; t.hidden = false;
@@ -562,7 +690,8 @@ function toast(msg, ms = 5000) {
   if (draft) {
     reset(draft.data);
     attempted = new Set(draft.attempted);
-    goStep(Math.min(Math.max(0, draft.step), STEPS.length - 1));
-    toast(`Відновлено робочу копію з цього пристрою (${new Date(draft.saved).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' })}). Щоб почати з нуля — натисніть «Очистити».`, 8000);
-  } else reset();
+    goStep(Math.min(Math.max(0, draft.step), STEPS.length - 1), { push: false });
+    addNotice('restored', 'info', `Відновлено робочу копію з цього пристрою (${new Date(draft.saved).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' })}). Щоб почати з нуля — натисніть «Очистити».`);
+  } else { reset(); focusStepStart(); }
+  replaceHistory();
 })();

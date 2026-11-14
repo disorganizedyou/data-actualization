@@ -55,9 +55,14 @@ function normElement(v) {
 }
 
 const unitKey = s => s.replace(/[\s.\-]/g, '');
+// Одиниці, які люди дописують до чисел («15 хв», «2,5 кг», «3 ос.») — прибираємо автоматично
+const MIN_UNIT = /\s*(хв\.?|хвилин[аи]?|min\.?)$/i;
+const KG_UNIT = /\s*(кг\.?|kg\.?)$/i;
+const COUNT_UNIT = /\s*(шт\.?|ос\.?|осіб|особ[аи]?|чол\.?)$/i;
+const stripUnit = (v, re) => v.trim().replace(re, '').trim();
 
 export const KINDS = {
-  phone: { ph: '+380 67 123 45 67', norm: normPhone, ok: isPhone, inputmode: 'tel',
+  phone: { ph: 'наприклад: +380 67 123 45 67', norm: normPhone, ok: isPhone, inputmode: 'tel',
     msg: 'Номер телефону у форматі +380 67 123 45 67 (для України — рівно 9 цифр після +380)' },
   signal: { ph: 'номер або ім’я користувача',
     norm: v => /^[\d+\s()\-.‐-―]+$/.test(v.trim()) ? normPhone(v) : v.trim().replace(/^@/, ''),
@@ -69,16 +74,16 @@ export const KINDS = {
   discord: { ph: 'ім’я користувача', norm: v => v.trim().replace(/^@/, ''),
     ok: v => /^[a-z0-9_.]{2,32}$/i.test(v) || /^.{2,32}#\d{4}$/.test(v),
     msg: 'Ім’я користувача Discord: латинські літери, цифри, крапка та «_»' },
-  coords: { ph: '37U DQ 12345 67890', norm: normCoords, ok: isCoords, max: 25, autocapitalize: 'characters',
+  coords: { ph: 'наприклад: 37U DQ 12345 67890', norm: normCoords, ok: isCoords, max: 25, autocapitalize: 'characters',
     msg: 'Координати MGRS латинськими літерами, наприклад 37U DQ 12345 67890' },
-  kg: { ph: 'наприклад, 2,5', inputmode: 'decimal', max: 6,
-    norm: v => { const t = v.trim().replace('.', ','); const m = t.match(/^(\d+)(,\d+)?$/); return m ? String(parseInt(m[1], 10)) + (m[2] ? m[2].replace(/0+$/, '').replace(/,$/, '') : '') : t; },
+  kg: { ph: 'наприклад: 2,5', inputmode: 'decimal', max: 6,
+    norm: v => { const t = stripUnit(v, KG_UNIT).replace('.', ','); const m = t.match(/^(\d+)(,\d+)?$/); return m ? String(parseInt(m[1], 10)) + (m[2] ? m[2].replace(/0+$/, '').replace(/,$/, '') : '') : t; },
     ok: v => /^\d+(,\d+)?$/.test(v) && num(v) >= 0.1 && num(v) <= 100,
     msg: 'Число в кілограмах (від 0,1 до 100), наприклад 2,5' },
-  min: { ph: 'наприклад, 15', inputmode: 'numeric', max: 4, norm: intNorm,
+  min: { ph: 'наприклад: 15', inputmode: 'numeric', max: 4, norm: v => intNorm(stripUnit(v, MIN_UNIT)),
     ok: v => /^\d{1,4}$/.test(v) && +v > 0 && +v <= 1440,
     msg: 'Ціле число хвилин від 1 до 1440, наприклад 15' },
-  count: { ph: '0', inputmode: 'numeric', max: 3, norm: intNorm, ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
+  count: { ph: '0', inputmode: 'numeric', max: 3, norm: v => intNorm(stripUnit(v, COUNT_UNIT)), ok: v => /^\d{1,3}$/.test(v), msg: 'Лише ціле число' },
   // Підрозділ обирають зі списку; значення зі старих звітів («2 мб», «2-МБ») зводимо до назви зі списку
   unit: { max: 40, norm: v => { const u = squash(v).toUpperCase(); return UNIT_CODES.find(c => unitKey(c) === unitKey(u)) || u; },
     ok: v => UNIT_CODES.includes(v), msg: 'Оберіть підрозділ зі списку' },
@@ -136,12 +141,14 @@ export function normalizeData(raw) {
 }
 
 // ---- Перевірка ----
-// problem: { level:'error'|'warn', path, step, section, item (індекс або undefined), label, msg }
-const problem = (level, path, sectionId, item, label, msg) => ({ level, path, step: stepOfSection(sectionId)?.id, section: sectionId, item, label, msg });
+// problem: { level:'error'|'warn', kind:'missing'|'invalid', path, step, section, item (індекс або undefined), label, msg }
+//   kind 'missing' — обов’язкове ще не заповнено; 'invalid' — заповнено неправильно або суперечить іншим відповідям.
+//   Обидва рівня 'error' блокують звіт; різниця лише в тому, як їх показувати.
+const problem = (level, path, sectionId, item, label, msg, kind = 'invalid') => ({ level, kind, path, step: stepOfSection(sectionId)?.id, section: sectionId, item, label, msg });
 const validISODate = v => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v;
 
 function checkValue(f, item, data, path, sectionId, idx, label, problems) {
-  const push = (p, msg, l = label) => problems.push(problem('error', p, sectionId, idx, l, msg));
+  const push = (p, msg, l = label, kind) => problems.push(problem('error', p, sectionId, idx, l, msg, kind));
   if (f.t === 'group') {
     let any = false;
     for (const [k, , short] of f.items) {
@@ -153,14 +160,14 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
     const other = item[`${f.k}_other`];
     if (hasText(other)) { any = true; if (other.length > OTHER_MAX) push(`${path}${f.k}_other`, `Задовгий текст: ${other.length} символів, максимум ${OTHER_MAX}`, `${label} — інше`); }
     // помилка групи стоїть на шляху самої групи (points.N.training), а не на першому рівні
-    if (!any && required(f, item, data)) push(`${path}${f.k}`, 'Вкажіть кількість хоча б для одного рівня або заповніть поле «Інше або уточнення»');
+    if (!any && required(f, item, data)) push(`${path}${f.k}`, 'Вкажіть кількість хоча б для одного рівня або заповніть поле «Інше або уточнення»', label, 'missing');
     return;
   }
   if (!visible(f, item)) return;
   const v = item[f.k], p = path + f.k;
   if (f.none && v === NONE) return;
   if (!hasText(v)) {
-    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'sel' ? 'Оберіть зі списку' : f.t === 'seg' ? 'Оберіть відповідь' : 'Обов’язкове поле');
+    if (required(f, item, data)) push(p, f.none ? 'Вкажіть контакт або позначте «Немає»' : f.t === 'sel' ? 'Оберіть зі списку' : f.t === 'seg' ? 'Оберіть відповідь' : 'Обов’язкове поле', label, 'missing');
     return;
   }
   if (v.length > maxLen(f)) { push(p, `Задовгий текст: ${v.length} символів, максимум ${maxLen(f)}`); return; }
@@ -179,7 +186,7 @@ export function validateData(d, { today = todayISO() } = {}) {
     if (s.list) {
       const list = s.list, items = Array.isArray(d[list.key]) ? d[list.key] : [];
       if (!visible({ showIf: list.showIf }, d)) continue;
-      if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, list.minMsg || `Додайте хоча б один елемент`));
+      if (items.length < (list.min || 0)) problems.push(problem('error', `${list.key}`, s.id, undefined, s.title, list.minMsg || `Додайте хоча б один елемент`, 'missing'));
       items.forEach((it, i) => { for (const f of list.fields) checkValue(f, it, d, `${list.key}.${i}.`, s.id, i, f.el || f.l, problems); });
     }
   }
@@ -235,6 +242,8 @@ function crossChecks(d, problems, today) {
 
 export const errorsOf = problems => problems.filter(p => p.level === 'error');
 export const warningsOf = problems => problems.filter(p => p.level === 'warn');
+export const missingOf = problems => problems.filter(p => p.level === 'error' && p.kind === 'missing');
+export const invalidOf = problems => problems.filter(p => p.level === 'error' && p.kind !== 'missing');
 // Помилки «нових полів» — для звітів попередніх версій форми це очікувано:
 // v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичний пункт
 export const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other', ...MEDPOINT_FIELD_KEYS];

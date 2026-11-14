@@ -42,7 +42,8 @@ await page.goto(FORM);
 await page.waitForSelector('.bar');
 await step(6);
 assert.ok(await page.isDisabled('#report'), 'порожня форма: кнопка звіту має бути неактивна');
-assert.match(await page.textContent('.box.bad h3'), /Потрібно виправити/);
+assert.match(await page.textContent('.check .box.warn h3'), /Лишилося заповнити/, 'порожня форма: незаповнене — окремо від помилок');
+assert.equal(await page.$('.check .box.bad'), null, 'у порожній формі немає «помилок» — лише незаповнене');
 
 console.log('▶ анкета: заповнення через UI');
 await step(0);
@@ -111,7 +112,8 @@ assert.ok(await page.isVisible('[data-section="algo"]'), 'скидають ін�
 await seg('drops', FULL.drops);
 assert.ok(await page.isHidden('[data-field="drops_other"]'));
 assert.ok(await page.isVisible('[data-list="positions"]'));
-await page.click('[data-add="positions"]');
+assert.equal(await page.$$eval('[data-card="positions"]', e => e.length), 1, '«Так» — перша картка позиції з’являється сама');
+assert.equal(await page.evaluate(() => document.activeElement.dataset.path), 'positions.0.name', 'курсор — у першому полі нової картки');
 for (const [i, p] of FULL.positions.entries()) { if (i > 0) await page.click('[data-add="positions"]'); for (const k of Object.keys(p)) await fill(`positions.${i}.${k}`, p[k]); }
 await fill('algo_carry', FULL.algo_carry); await fill('algo_hand', FULL.algo_hand); await fill('algo_time', FULL.algo_time);
 // формування скидів медпунктом — на тому самому кроці «Медичні скиди»
@@ -121,8 +123,8 @@ await seg('mp_std', FULL.mp_std); await fill('mp_std_qty', FULL.mp_std_qty);
 console.log('▶ анкета: перевірка та звіт');
 await step(6);
 await page.screenshot({ path: resolve(OUT, 'check.png'), fullPage: true });
-const errBox = await page.$('.box.bad');
-if (errBox) { console.error(await errBox.innerText()); throw new Error('на кроці перевірки лишилися помилки'); }
+const errBox = await page.$('.check .box.bad') || await page.$('.check .box.warn:has(h3:text("Лишилося"))');
+if (errBox) { console.error(await errBox.innerText()); throw new Error('на кроці перевірки лишилися помилки або незаповнені поля'); }
 // підтверджуємо зауваження, якщо є
 for (const cb of await page.$$('[data-ack]')) { if (!(await cb.isChecked())) await cb.click(); }
 assert.ok(await page.isEnabled('#report'), 'кнопка звіту активна після заповнення');
@@ -162,9 +164,9 @@ console.log('▶ анкета: відкриття звіту старої фор
 await page.goto(FORM);
 await page.waitForSelector('.bar');
 await page.setInputFiles('#open', resolve(ROOT, 'test/fixtures/legacy_v1.pdf'));
-await page.waitForSelector('.box.bad');
-assert.match(await page.textContent('#toast'), /старої версії/);
-const legacyItems = await page.$$eval('.box.bad li', els => els.map(e => e.textContent));
+await page.waitForSelector('.check');
+assert.match(await page.textContent('.notice'), /старої версії/, 'повідомлення про стару версію не зникає само');
+const legacyItems = await page.$$eval('.check .box li', els => els.map(e => e.textContent));
 assert.ok(legacyItems.some(t => /НРК/.test(t)) && legacyItems.some(t => /хімзахист/.test(t)), 'старий звіт вимагає нові поля');
 assert.ok(await page.isDisabled('#report'));
 
