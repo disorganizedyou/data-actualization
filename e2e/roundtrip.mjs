@@ -61,14 +61,12 @@ for (const r of ['kb', 's4', 'mp']) {
   assert.equal(await page.inputValue(`[data-path="${r}_phone"]`), FULL[`${r}_phone`]);
 }
 
-console.log('▶ анкета: медпункти');
+console.log('▶ анкета: медпункт');
 await step(3);
-assert.match(await page.textContent('[data-section="medpoints"] h3'), /начальники/);
-assert.ok(!(await page.$('[data-del="medpoints:0"]')), 'єдиний медпункт не видаляється');
-for (const [i, m] of FULL.medpoints.entries()) {
-  if (i > 0) await page.click('[data-add="medpoints"]');
-  for (const [k, v] of Object.entries(m)) { if (v === 'Немає') await none(`medpoints.${i}.${k}`); else await fill(`medpoints.${i}.${k}`, v); }
-}
+assert.ok(!(await page.$('[data-add]')), 'медпункт один — кнопки «Додати» немає');
+await fill('mp_coords', FULL.mp_coords);
+await fill('mphead_callsign', FULL.mphead_callsign);
+for (const c of ['phone', 'signal', 'element', 'discord']) { const v = FULL[`mphead_${c}`]; if (v === 'Немає') await none(`mphead_${c}`); else await fill(`mphead_${c}`, v); }
 
 await step(4);
 const fillPoint = async (i, p) => {
@@ -134,7 +132,7 @@ const payload = await readPdfBytes(report.bytes, { inflate });
 assert.equal(payload.kind, 'report');
 assert.equal(payload.data.unit, FULL.unit);
 assert.equal(payload.data.points.length, 2);
-assert.deepEqual(payload.data.medpoints, FULL.medpoints, 'медпункти збережено у звіті');
+assert.equal(payload.data.mp_coords, FULL.mp_coords); assert.equal(payload.data.mphead_element, FULL.mphead_element);
 assert.equal(payload.data.points[0].nrk_count, '2');
 assert.equal(payload.data.positions.length, FULL.positions.length);
 // резервний шлях читання: псуємо маркер — має спрацювати вкладений data.json

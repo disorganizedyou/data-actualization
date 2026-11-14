@@ -66,17 +66,12 @@ export function buildReport(d, { kind = 'report', created = '', version = '', re
 
   const head = t => ({ text: t, color: C.grey, fontSize: z(7) });
 
-  // Медичні пункти
-  const meds = (d.medpoints || []).filter(nonEmpty);
-  const MW = [14, '*', 96, 170], fitMed = k.fit(starWidth(MW, PAGE.cw), z(9.5));
-  const medpoints = meds.length ? { layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true, widths: MW,
-    body: [[head('№'), head('Медпункт'), head('Начальник'), head('Контакти начальника')],
-      ...meds.map((m, i) => [
-        { text: String(i + 1), color: C.grey },
-        { stack: [{ ...val(fitMed(m.name), z(9.5)) }, { text: m.coords || '', color: C.grey, fontSize: z(8) }] },
-        val(m.head_callsign, z(9.5)),
-        headContacts(k, m, { width: 170, size: z(9), iconColor: C.grey }),
-      ])] } } : { text: 'Медпунктів не вказано', color: C.grey };
+  // Медичний пункт: координати + начальник
+  const medpoint = { layout: k.lines(false), table: { widths: [LW, '*'], dontBreakRows: true, body: [
+    [lab('Координати'), val(d.mp_coords)],
+    [lab('Начальник — позивний'), val(d.mphead_callsign)],
+    ...HEAD_CONTACTS.map(c => [lab(`Начальник — ${c.l}`, c.icon), val(fitV(d[c.k]))]),
+  ] } };
 
   // Зведення по точках
   const points = (d.points || []).filter(nonEmpty);
@@ -136,7 +131,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '', re
     sec('Контакти чергових'),
     { text: 'Службові контакти чергових акаунтів, а не особисті контакти військовослужбовців.', color: C.grey, margin: [0, 0, 0, z(6)] },
     contacts,
-    sec('Медичні пункти'), medpoints,
+    sec('Медичний пункт'), medpoint,
     sec('Зведення по точках передачі'),
     summary || { text: 'Точок не вказано', color: C.grey },
     sec(T(pts) + ' — детально'),

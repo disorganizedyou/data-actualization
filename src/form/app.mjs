@@ -169,13 +169,12 @@ function checkHtml() {
   const byStep = STEPS.filter(s => !s.final).map(s => ({ s, e: errs.filter(p => p.step === s.id) })).filter(x => x.e.length);
   const unacked = warns.filter(w => !ack.has(ackKey(w)));
   const canDownload = !errs.length && !unacked.length;
-  const pts = (data.points || []).length, pos = data.drops === 'Так' ? (data.positions || []).length : 0, meds = (data.medpoints || []).length;
+  const pts = (data.points || []).length, pos = data.drops === 'Так' ? (data.positions || []).length : 0;
   const staleDate = reopened && data.date === reopened.date && data.date !== todayISO();
   return `<section class="sec check">
     <div class="sum">
       <div><span>Підрозділ</span><b>${esc(hasText(data.unit) ? data.unit.toUpperCase() : '—')}</b></div>
       <div><span>Дата</span><b>${esc(fmtDate(data.date) || '—')}</b></div>
-      <div><span>Медпунктів</span><b>${meds}</b></div>
       <div><span>Точок передачі</span><b>${pts}</b></div>
       <div><span>Позицій для скидів</span><b>${data.drops === 'Так' ? pos : data.drops === 'Ні' ? 'немає' : '—'}</b></div>
       <div><span>Заповнено обов’язкових</span><b>${pr.done} з ${pr.total}</b></div>
@@ -532,8 +531,9 @@ async function openPdf(file) {
     let msg = `${what} ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'} завантажено.`;
     const from = p.legacy ? 1 : p.data.migratedFrom;
     if (from) {
-      const what = [from < 2 && 'НРК, гіпотермія, хімзахист', from < 3 && 'чи здійснюють скиди інші підрозділи', from < 4 && 'медичні пункти'].filter(Boolean);
-      msg += ` Це файл ${from === 1 ? 'старої' : 'попередньої'} версії форми: з’явилися нові питання (${what.join('; ')}) — їх треба заповнити.`;
+      const what = [from < 2 && 'НРК, гіпотермія, хімзахист', from < 3 && 'чи здійснюють скиди інші підрозділи', from < 4 && 'координати й начальник медпункту'].filter(Boolean);
+      msg += from < 4 ? ` Це файл ${from === 1 ? 'старої' : 'попередньої'} версії форми: з’явилися нові питання (${what.join('; ')}) — їх треба заповнити.`
+        : ' Це файл попередньої версії форми — дані перенесено автоматично.';
       if (from < 3) msg += ' Питання про медичне майно об’єднано в одне — перевірте відповідь.';
     }
     if (errs.length) msg += ` Залишилося виправити: ${errs.length} ${plural(errs.length, 'помилку', 'помилки', 'помилок')}.`;

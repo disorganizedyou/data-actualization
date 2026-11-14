@@ -15,7 +15,7 @@
 //   hint     підказка під полем
 //   el       підпис у списку помилок, якщо l без контексту картки неоднозначний (за замовчуванням = l)
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const NONE = 'Немає';
 export const TITLE = 'Актуалізація даних для медичної служби';
 export const FORM_NAME = 'Анкета актуалізації даних';
@@ -114,20 +114,9 @@ export const POSITION_FIELDS = [
   { k: 'flight', l: 'Час підльоту до позиції переднього краю, хв', pl: 'Час підльоту, хв', v: 'min', req: true },
 ];
 
-// ---- Медичний пункт: розташування й контакти начальника ----
-// Усередині картки «Медпункт N» підписи короткі (без повторення «медпункту»); el — для списку помилок
-export const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `head_${c.k}`, el: `${c.l} начальника` }));
-export const MEDPOINT_GROUPS = [
-  { id: 'loc', title: 'Розташування', fields: [
-    { k: 'name', l: 'Назва', el: 'Назва медпункту', pl: 'Назва', v: 'name', max: 60, req: true, ph: 'наприклад: МП 2МБ, «Берізка»' },
-    { k: 'coords', l: 'Координати (MGRS)', el: 'Координати медпункту', pl: 'Координати', v: 'coords', req: true },
-  ] },
-  { id: 'head', title: 'Начальник', fields: [
-    { k: 'head_callsign', l: 'Позивний', el: 'Позивний начальника', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
-    ...HEAD_CONTACTS,
-  ] },
-];
-export const MEDPOINT_FIELDS = MEDPOINT_GROUPS.flatMap(g => g.fields);
+// ---- Медичний пункт (у підрозділі він один): розташування й контакти начальника ----
+export const HEAD_CONTACTS = CONTACT.filter(c => c.none).map(c => ({ ...c, k: `mphead_${c.k}` }));
+export const MEDPOINT_FIELD_KEYS = ['mp_coords', 'mphead_callsign', ...HEAD_CONTACTS.map(c => c.k)];
 
 const roleSection = r => ({
   id: r.role, role: r.role, title: r.title, pt: r.short, note: r.note,
@@ -143,12 +132,15 @@ export const SECTIONS = [
     { k: 'author', l: 'Ваш позивний', pl: 'Заповнив(-ла)', v: 'callsign', max: 30, req: true },
   ] },
   ...ROLES.map(roleSection),
-  { id: 'medpoints', title: 'Розташування та начальники медпунктів', pt: 'Медичні пункти',
-    hint: 'Додайте всі медпункти підрозділу. Тут потрібні контакти самого начальника — для прямого зв’язку з ним.',
-    list: { key: 'medpoints', item: 'Медпункт', addText: 'медпункт', min: 1, keepOne: true,
-      minMsg: 'Додайте хоча б один медпункт',
-      keepMsg: 'Має бути хоча б один медпункт. Можна очистити поля, але не видалити останній медпункт.',
-      groups: MEDPOINT_GROUPS, fields: MEDPOINT_FIELDS } },
+  { id: 'mploc', title: 'Розташування медпункту', pt: 'Медичний пункт', fields: [
+    { k: 'mp_coords', l: 'Координати медпункту (MGRS)', pl: 'Координати', v: 'coords', req: true },
+  ] },
+  { id: 'mphead', title: 'Начальник медпункту', pt: 'Начальник медпункту',
+    hint: 'Тут потрібні контакти самого начальника — для прямого зв’язку з ним.',
+    fields: [
+      { k: 'mphead_callsign', l: 'Позивний начальника', pl: 'Начальник', v: 'callsign', max: 30, req: true, ph: 'наприклад: Лікар' },
+      ...HEAD_CONTACTS,
+    ] },
   { id: 'points', title: 'Точки передачі поранених', pt: 'Точки передачі поранених',
     list: { key: 'points', item: 'Точка', addText: 'точку', min: 1, keepOne: true,
       minMsg: 'Додайте хоча б одну точку',
@@ -190,7 +182,7 @@ export const STEPS = [
   { id: 'general', title: 'Загальні дані', short: 'Загальне', sections: ['general'] },
   { id: 'kb', title: 'Черговий капітан бою', short: 'КБ', sections: ['kb'] },
   { id: 's4', title: 'Черговий S4', short: 'S4', sections: ['s4'] },
-  { id: 'med', title: 'Медичні пункти', short: 'Медпункти', sections: ['mp', 'medpoints'] },
+  { id: 'med', title: 'Медичний пункт', short: 'Медпункт', sections: ['mploc', 'mp', 'mphead'] },
   { id: 'points', title: 'Точки передачі поранених', short: 'Точки', sections: ['points'] },
   { id: 'drops', title: 'Медичні скиди', short: 'Скиди', sections: ['drops', 'algo', 'mphelp'] },
   { id: 'check', title: 'Перевірка та звіт', short: 'Звіт', sections: [], final: true },

@@ -18,7 +18,7 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
   const header = { columns: [
     { width: '*', stack: [
       { text: 'Довідка чергового', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
-      { text: 'Медична служба: чергові, медпункти, точки передачі поранених, медичні скиди', color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      { text: 'Медична служба: чергові, медпункт, точки передачі поранених, медичні скиди', color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
       { text: [{ text: 'Актуально на  ', color: C.grey }, { text: fmtDate(d.date) || '—', bold: true }], fontSize: z(10), margin: [0, z(6), 0, 0] },
       ...(warn ? [{ text: warn.toUpperCase(), color: '#fff', background: C.bad, bold: true, fontSize: z(8), margin: [0, z(6), 0, 0] }] : [])] },
     { width: UNIT_W, stack: [
@@ -46,13 +46,11 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
 
   const head = t => ({ text: t, color: C.grey, fontSize: z(7.5) });
   const num = i => ({ text: String(i + 1), font: THEME.head, bold: true, fontSize: z(14), color: C.ink, lineHeight: 1 });
-  const medRows = (d.medpoints || []).filter(nonEmpty);
-  const MW = [z(18), '*', z(116), z(86), z(150)], fitM = k.fit(starWidth(MW, PAGE.cw), z(11));
-  const medpoints = medRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true, widths: MW,
-    body: [[head('№'), head('Медпункт'), head('Координати MGRS'), head('Начальник'), head('Контакти начальника')],
-      ...medRows.map((m, i) => [num(i), val(fitM(m.name), z(11)), { ...val(m.coords, z(10.5)), noWrap: true },
-        val(m.head_callsign, z(10.5)), headContacts(k, m, { width: z(150), size: z(9.5), iconColor: C.ink, skipNone: true })])] } }
-    : { text: 'Медпунктів не вказано', color: C.grey };
+  const MW = [z(150), z(120), '*'];
+  const medpoint = { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true, widths: MW,
+    body: [[head('Координати MGRS'), head('Начальник'), head('Контакти начальника')],
+      [{ ...val(d.mp_coords, z(11)), noWrap: true }, val(d.mphead_callsign, z(11)),
+        headContacts(k, d, { width: starWidth(MW, PAGE.cw), size: z(9.5), iconColor: C.ink, skipNone: true })]] } };
 
   const pointRows = (d.points || []).filter(nonEmpty);
   const nrkCell = p => {
@@ -98,7 +96,7 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
     defaultStyle: { font: 'eU', fontSize: z(9), lineHeight: 1.15, color: C.ink },
     content: [header,
       sec('Чергові'), cards,
-      sec('Медичні пункти'), medpoints,
+      sec('Медичний пункт'), medpoint,
       sec(T(pts)), points,
       sec(T(pos)), positions,
       sec(T(algo)), ...algoBlock],

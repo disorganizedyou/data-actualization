@@ -60,13 +60,23 @@ export function parsePayload(text) {
 //            «Інтернет» («Є, стабільний»); «Потреба в скидах установленого зразка» — Так/Ні;
 //            нове питання «чи здійснюють скиди інші» (виводиться з алгоритму, якщо його було описано).
 //   Ключі v1 і v2 збігаються, тож перетворення v2 → v3 застосовується до обох.
-//   v3 → v4: новий розділ «Медичні пункти» — достатньо нормалізації (з’явиться порожня картка).
+//   v3 → v4: новий розділ про медичні пункти (список).
+//   v4 → v5: медпункт у підрозділі один — список medpoints замінено полями mp_coords і mphead_*
+//            (з v4 беремо перший медпункт; назва медпункту більше не збирається).
 //   Для всіх версій: обладнання НРК (РЕБ/камера/мікрофон) — лише Так/Ні; давнє «Частково»
 //   не вгадуємо, а очищаємо — форма попросить відповісти заново.
 const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
 const NET_V3 = { 'Є, стабільна': 'Є, стабільний', 'Є, нестабільна': 'Є, нестабільний' };
 const YN_V3 = { 'Є': 'Так', 'Немає': 'Ні' };
 const txt = v => typeof v === 'string' ? v.trim() : '';
+const medpointToFields = src => {
+  const m = Array.isArray(src.medpoints) ? src.medpoints[0] : null;
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return src;
+  const d = { ...src };
+  if (d.mp_coords == null && m.coords != null) d.mp_coords = m.coords;
+  for (const k of ['callsign', 'phone', 'signal', 'element', 'discord']) if (d[`mphead_${k}`] == null && m[`head_${k}`] != null) d[`mphead_${k}`] = m[`head_${k}`];
+  return d;
+};
 const NRK_YN = ['nrk_reb', 'nrk_cam', 'nrk_mic'];
 const dropPartialNrk = src => !Array.isArray(src.points) ? src : { ...src, points: src.points.map(p => {
   if (!p || typeof p !== 'object' || Array.isArray(p) || !NRK_YN.some(k => p[k] === 'Частково')) return p;
@@ -95,7 +105,7 @@ function upgradeToV3(src) {
 
 export function migrate(data, fromVersion) {
   const src = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-  const d = normalizeData(dropPartialNrk(fromVersion < 3 ? upgradeToV3(src) : src));
+  const d = normalizeData(medpointToFields(dropPartialNrk(fromVersion < 3 ? upgradeToV3(src) : src)));
   if (fromVersion < SCHEMA_VERSION) d.migratedFrom = fromVersion;
   return d;
 }

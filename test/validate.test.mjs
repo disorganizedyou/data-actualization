@@ -8,7 +8,6 @@ import { migrate } from '../src/shared/codec.mjs';
 const TODAY = '2026-10-31';
 const errs = d => errorsOf(validateData(normalizeData(d), { today: TODAY }));
 const warns = d => warningsOf(validateData(normalizeData(d), { today: TODAY }));
-const errsOf = errs;
 const clone = () => JSON.parse(JSON.stringify(FULL));
 
 test('схема: кожен розділ має крок, ключі унікальні', () => {
@@ -108,25 +107,31 @@ test('НРК: за «Є» обов’язкові кількість і три �
   assert.equal(normalizeData(d).points[1].nrk_count, undefined, 'за «Немає» кількість очищається');
 });
 
-test('медпункти: обов’язкові назва, координати, начальник і хоча б один контакт', () => {
+test('медпункт: обов’язкові координати, начальник і хоча б один його контакт', () => {
+  const KEYS = ['mp_coords', 'mphead_callsign', 'mphead_phone', 'mphead_signal', 'mphead_element', 'mphead_discord'];
   const d = clone();
-  d.medpoints = [{}];
+  for (const k of KEYS) delete d[k];
   const e = errs(d).map(x => x.path);
-  for (const k of ['name', 'coords', 'head_callsign', 'head_phone', 'head_signal', 'head_element', 'head_discord']) assert.ok(e.includes(`medpoints.0.${k}`), k);
-  d.medpoints = [];
-  assert.equal(normalizeData(d).medpoints.length, 1, 'завжди є хоча б одна картка медпункту');
-  d.medpoints = [{ ...FULL.medpoints[0], head_phone: 'Немає', head_element: 'Немає' }];
-  assert.ok(errs(d).some(x => x.path === 'medpoints.0.head_phone' && /начальником/.test(x.msg)), 'усі контакти «Немає» — помилка');
-  d.medpoints = [FULL.medpoints[0], { ...FULL.medpoints[0], name: 'мп 2мб' }];
-  assert.ok(errs(d).some(x => x.path === 'medpoints.1.name' && /Така сама/.test(x.msg)), 'дубль назви');
-  d.medpoints[1].name = 'МП 2'; d.medpoints[1].head_phone = '0661112233';
+  for (const k of KEYS) assert.ok(e.includes(k), k);
+  Object.assign(d, { mp_coords: '37udq1500070000', mphead_callsign: 'Лікар', mphead_phone: 'Немає', mphead_signal: 'Немає', mphead_element: 'Немає', mphead_discord: 'Немає' });
+  assert.ok(errs(d).some(x => x.path === 'mphead_phone' && /начальником/.test(x.msg)), 'усі контакти «Немає» — помилка');
+  d.mphead_phone = '0661112233';
   assert.equal(errs(d).length, 0);
-  assert.equal(normalizeData(d).medpoints[1].head_phone, '+380 66 111 22 33', 'телефон нормалізується');
-  // звіт попередньої версії: порожній медпункт — «нове поле», а не помилка
-  const old = migrate({ ...FULL, medpoints: undefined }, 3);
-  assert.equal(old.migratedFrom, 3);
-  const oe = errsOf(old);
-  assert.ok(oe.length && oe.every(isNewFieldError), oe.map(x => x.path).join(', '));
+  const n = normalizeData(d);
+  assert.equal(n.mphead_phone, '+380 66 111 22 33', 'телефон нормалізується');
+  assert.equal(n.mp_coords, '37U DQ 15000 70000', 'координати нормалізуються');
+  // v4 (список медпунктів) → v5: береться перший медпункт
+  const v4 = { ...FULL, medpoints: [{ name: 'МП 2МБ', coords: '37U DQ 11111 22222', head_callsign: 'Док', head_phone: '0670000001', head_signal: 'Немає', head_element: 'dok', head_discord: 'Немає' }, { name: 'МП 2' }] };
+  for (const k of KEYS) delete v4[k];
+  const m = migrate(v4, 4);
+  assert.equal(m.migratedFrom, 4); assert.equal(m.medpoints, undefined);
+  assert.equal(m.mp_coords, '37U DQ 11111 22222'); assert.equal(m.mphead_callsign, 'Док');
+  assert.equal(m.mphead_phone, '+380 67 000 00 01'); assert.equal(m.mphead_signal, 'Немає');
+  assert.deepEqual(errs(m).map(x => x.path), []);
+  // звіт v3 (без медпункту): незаповнені поля медпункту — «нові поля», а не помилки
+  const v3 = { ...FULL }; for (const k of KEYS) delete v3[k];
+  const oe = errs(migrate(v3, 3));
+  assert.equal(oe.length, KEYS.length); assert.ok(oe.every(isNewFieldError), oe.map(x => x.path).join(', '));
 });
 
 test('гіпотермія та хімзахист обов’язкові для кожної точки', () => {
@@ -242,7 +247,7 @@ test('міграція v2 → v3: «забезпечення» + «потреб�
   // повний v2-звіт після міграції — без помилок
   assert.deepEqual(errs(migrate({ ...FULL, points: [POINT_V2], mp_std: 'Є' }, 2)).map(x => x.path), []);
   // поточна версія не перетворюється повторно
-  assert.equal(migrate(FULL, 4).migratedFrom, undefined);
+  assert.equal(migrate(FULL, 5).migratedFrom, undefined);
 });
 
 test('транслітерація імен файлів', async () => {

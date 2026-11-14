@@ -171,7 +171,7 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
   .fields fieldset.group { grid-column: 1 / -1; }
   .fields :is(.fld:has(textarea), .fld:has(.seg)) { grid-column: 1 / -1; }
   .sec[data-section="general"] .fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .sec[data-section="kb"] .fields, .sec[data-section="s4"] .fields, .sec[data-section="mp"] .fields { grid-template-columns: 1fr; }
+  .sec[data-section="kb"] .fields, .sec[data-section="s4"] .fields, .sec[data-section="mp"] .fields, .sec[data-section="mphead"] .fields, .sec[data-section="mploc"] .fields { grid-template-columns: 1fr; }
   .sum { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .h2 { font-size: 28px; }
 }

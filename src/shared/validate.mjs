@@ -2,7 +2,7 @@
 // Чиста логіка без DOM — використовується формою, інструментом медслужби й тестами.
 
 import { SECTIONS, LEVELS, ROLES, CONTACT, NONE, SCHEMA_VERSION, POINT_FIELDS, POSITION_FIELDS,
-  groupKeys, visible, required, stepOfSection, listDef, dropsDone, LIST_KEYS, HEAD_CONTACTS } from './schema.mjs';
+  groupKeys, visible, required, stepOfSection, listDef, dropsDone, LIST_KEYS, HEAD_CONTACTS, MEDPOINT_FIELD_KEYS } from './schema.mjs';
 import { hasText, daysBetween, todayISO, plural } from './text.mjs';
 
 export const MAX_IMPORT_STRING = 2000;   // жорсткий ліміт довжини рядка при імпорті з файла/чернетки
@@ -201,17 +201,11 @@ function crossChecks(d, problems, today) {
     const vals = CONTACT.filter(c => c.none).map(c => d[`${r.role}_${c.k}`]);
     if (vals.length && vals.every(v => v === NONE)) push('error', `${r.role}_phone`, r.role, undefined, r.title, 'Потрібен хоча б один спосіб зв’язку з черговим');
   }
-  // Медпункти
-  const meds = Array.isArray(d.medpoints) ? d.medpoints : [];
-  const seenMed = new Map();
-  meds.forEach((m, i) => {
-    const n = (m.name || '').trim().toLowerCase();
-    if (n) { if (seenMed.has(n)) push('error', `medpoints.${i}.name`, 'medpoints', i, 'Назва медпункту', `Така сама назва, як у медпункту ${seenMed.get(n) + 1}`); else seenMed.set(n, i); }
-    if (hasText(m.coords) && isCoords(m.coords) && !coordsInUkraine(m.coords))
-      push('warn', `medpoints.${i}.coords`, 'medpoints', i, 'Координати медпункту', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
-    if (HEAD_CONTACTS.every(c => m[c.k] === NONE))
-      push('error', `medpoints.${i}.head_phone`, 'medpoints', i, 'Начальник медпункту', 'Потрібен хоча б один спосіб зв’язку з начальником медпункту');
-  });
+  // Медпункт
+  if (hasText(d.mp_coords) && isCoords(d.mp_coords) && !coordsInUkraine(d.mp_coords))
+    push('warn', 'mp_coords', 'mploc', undefined, 'Координати медпункту', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
+  if (HEAD_CONTACTS.every(c => d[c.k] === NONE))
+    push('error', HEAD_CONTACTS[0].k, 'mphead', undefined, 'Начальник медпункту', 'Потрібен хоча б один спосіб зв’язку з начальником медпункту');
   // Точки
   const pts = Array.isArray(d.points) ? d.points : [];
   const seenName = new Map(), seenCoords = new Map();
@@ -239,10 +233,9 @@ function crossChecks(d, problems, today) {
 export const errorsOf = problems => problems.filter(p => p.level === 'error');
 export const warningsOf = problems => problems.filter(p => p.level === 'warn');
 // Помилки «нових полів» — для звітів попередніх версій форми це очікувано:
-// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичні пункти
-export const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other'];
-export const isNewFieldError = p => p.path === 'medpoints' || p.path.startsWith('medpoints.')
-  || NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
+// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичний пункт
+export const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other', ...MEDPOINT_FIELD_KEYS];
+export const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)
 export function progressOf(d) {
