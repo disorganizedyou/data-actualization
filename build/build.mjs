@@ -104,6 +104,9 @@ export function build({ version = process.env.BUILD_VERSION || gitVersion(), out
     writeFileSync(out, html);
     results[out] = html.length;
   }
+  // Контрольні суми для перевірки, що файл не підмінено (публікуються разом із версією в Element)
+  const sums = Object.keys(TARGETS).map(name => `${createHash('sha256').update(readFileSync(resolve(outDir, name))).digest('hex')}  ${name}`);
+  writeFileSync(resolve(outDir, 'SHA256SUMS.txt'), `# Версія ${version}\n${sums.join('\n')}\n`);
   return results;
 }
 
@@ -126,17 +129,21 @@ function checkDuplicates(modules) {
   }
 }
 
-// Версія збірки: дата + 7 знаків хешу вихідних файлів (детерміновано, не залежить від git)
+// Версія збірки: позначка випуску з package.json (РРРР.М.Н) + 7 знаків хешу вихідних файлів
+// (детерміновано, не залежить від git: той самий код — та сама версія)
 function gitVersion() {
   const h = createHash('sha256');
   const files = ['src/shared', 'src/form', 'src/med', 'build', 'vendor'].flatMap(dir => readdirSync(resolve(ROOT, dir), { withFileTypes: true, recursive: true })
     .filter(e => e.isFile()).map(e => resolve(e.parentPath ?? e.path, e.name))).sort();
   for (const f of files) h.update(f.slice(ROOT.length)).update(readFileSync(f));
-  return `v2-${h.digest('hex').slice(0, 7)}`;
+  h.update(read('package.json'));
+  const release = JSON.parse(read('package.json')).version;
+  return `${release}-${h.digest('hex').slice(0, 7)}`;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--update-manifest')) { checkVendor({ update: true }); console.log('vendor/MANIFEST.json оновлено'); }
   const r = build();
   for (const [f, n] of Object.entries(r)) console.log(`${f}  ${(n / 1024).toFixed(0)} KB`);
+  console.log(readFileSync(resolve(ROOT, 'dist/SHA256SUMS.txt'), 'utf8').trim());
 }

@@ -60,6 +60,9 @@ export const UNIT_CODES = UNITS.map(u => u[0]);
 // Повна назва підрозділу за короткою ('' — якщо такого в списку немає)
 export const unitName = code => (UNITS.find(u => u[0] === String(code ?? '').trim().toUpperCase()) || [])[1] || '';
 
+// Сервер Element, на якому мають акаунти всі чергові (рішення медслужби). Анкета зберігає лише нікнейм.
+export const ELEMENT_SERVER = 'vizerunok.org';
+
 export const OPT = {
   yn: ['Так', 'Ні'],
   ypn: ['Так', 'Частково', 'Ні'],
@@ -83,7 +86,7 @@ export const CONTACT = [
   { k: 'callsign', l: 'Позивний чергового', pl: 'Позивний', v: 'callsign', max: 30, req: true, ph: 'наприклад: Сокіл', w: 6 },
   { k: 'phone', l: 'WhatsApp', icon: 'whatsapp', v: 'phone', none: true, req: true },
   { k: 'signal', l: 'Signal', icon: 'signal', v: 'signal', none: true, req: true },
-  { k: 'element', l: 'Element', icon: 'element', v: 'element', none: true, req: true },
+  { k: 'element', l: 'Element', icon: 'element', v: 'element', none: true, req: true, hint: `Сервер — ${ELEMENT_SERVER}` },
   { k: 'discord', l: 'Discord', icon: 'discord', v: 'discord', none: true, req: true },
 ];
 

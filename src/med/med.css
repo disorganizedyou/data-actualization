@@ -38,6 +38,9 @@ b { font-weight: 600; }
 .tbl td small { display: block; color: var(--mute); font-size: 12px; }
 .tbl .unit { font: 600 17px/1.2 var(--head); }
 .tbl .st { display: flex; flex-wrap: wrap; gap: 4px; }
+.tbl .badge { white-space: normal; display: inline-block; }
+.tbl td:nth-child(4) { min-width: 120px; max-width: 220px; }
+.tbl td:nth-child(5) { max-width: 130px; }
 .details li.note { color: var(--mute); }
 .tbl .act { white-space: nowrap; text-align: right; }
 .tbl .act .btn { margin-left: 4px; }
@@ -64,3 +67,11 @@ b { font-weight: 600; }
 .hint { font-size: 13px; color: var(--mute); }
 .toast { position: fixed; left: 16px; right: 16px; bottom: 20px; z-index: 20; max-width: 560px; margin: 0 auto; background: var(--ink); color: #fff; padding: 12px 16px; border-radius: var(--r-s); font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
 @media (max-width: 760px) { .tbl thead { display: none; } .tbl tr { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); } .tbl td { border: 0; padding: 2px 0; } .tbl .act { grid-column: 1 / -1; text-align: left; } .det td { grid-column: 1 / -1; } }
+
+.details h4.sub { margin-top: 14px; }
+dialog.choose { border: 0; border-radius: 12px; padding: 20px 22px; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,.25); font: inherit; color: inherit; }
+dialog.choose::backdrop { background: rgba(15,23,32,.45); }
+dialog.choose h3 { font-size: 18px; margin-bottom: 8px; }
+dialog.choose p { color: #45505c; margin-bottom: 16px; line-height: 1.45; }
+.choose-b { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 1100px) { .tbl .act { white-space: normal; min-width: 150px; } .tbl .act .btn { margin: 2px 0 2px 4px; } }

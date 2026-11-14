@@ -206,7 +206,9 @@ const needs = await mdl('#needs'); assert.equal(pageCount(needs.bytes), 1); asse
 // старий звіт: позначка «стара форма», а не червоні помилки
 await mpage.setInputFiles('#open', resolve(ROOT, 'test/fixtures/legacy_v1.pdf'));
 await mpage.waitForFunction(() => document.querySelectorAll('.tbl tbody tr:not(.det)').length === 2);
+assert.match(await mpage.textContent('tr:has(.unit:text("2МБ"))'), /актуальна/, 'звіт заповнено поточною версією анкети');
 const legacyRow = await mpage.textContent('tr:has(.unit:text("МР")) .st');
+assert.match(await mpage.textContent('tr:has(.unit:text("МР"))'), /стара анкета/);
 assert.match(legacyRow, /стара форма/); assert.match(legacyRow, /1 помилка/, 'нові поля старого звіту — не «помилки»; єдина помилка — підрозділ «МР» не зі списку');
 const regen = await mdl('[data-report]'); assert.match(regen.name, /^Zvit_med_/);
 
@@ -220,8 +222,12 @@ const focused = () => dp.evaluate(() => document.activeElement.dataset.path || d
 const h2 = () => dp.textContent('.h2 small');
 await dp.goto(FORM); await dp.waitForSelector('.bar');
 assert.equal(await focused(), 'unit', 'на комп’ютері курсор одразу в першому полі');
+assert.match(await dp.textContent('.intro .ver'), /^Версія анкети: \d{4}\.\d+\.\d+-[0-9a-f]{7}$/, 'версію анкети видно');
+assert.equal(await dp.isChecked('#autosave'), false, 'на комп’ютері робоча копія за замовчуванням вимкнена');
 await dp.selectOption('[data-path="unit"]', FULL.unit);
 await dp.focus('[data-path="author"]'); await dp.keyboard.type(FULL.author);
+assert.match(await dp.textContent('.notice[data-notice="nosave"]'), /не зберігається/, 'попередження: робоча копія не зберігається');
+assert.equal(await dp.evaluate(() => localStorage.getItem('med-anketa-draft-v2')), null, 'нічого не записано в браузер');
 await dp.keyboard.press('Control+Enter');
 assert.match(await h2(), /Крок 2 з 7/, 'Ctrl+Enter — «Далі»');
 assert.equal(await focused(), 'kb_callsign', 'після «Далі» курсор у першому полі кроку');

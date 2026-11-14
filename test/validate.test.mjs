@@ -65,7 +65,9 @@ test('MGRS: нормалізація й межі', () => {
 
 test('месенджери: формати', () => {
   assert.ok(KINDS.signal.ok('kit.07')); assert.ok(KINDS.signal.ok('+380 67 123 45 67')); assert.ok(!KINDS.signal.ok('kit'));
-  assert.equal(KINDS.element.norm('@kit:matrix.org'), 'kit'); assert.ok(KINDS.element.ok('kit')); assert.ok(!KINDS.element.ok('kit room'));
+  assert.equal(KINDS.element.norm('@kit:vizerunok.org'), 'kit'); assert.ok(KINDS.element.ok('kit')); assert.ok(!KINDS.element.ok('kit room'));
+  assert.equal(KINDS.element.norm('@kit:matrix.org'), '@kit:matrix.org', 'інший сервер — не скорочуємо');
+  assert.ok(!KINDS.element.ok('@kit:matrix.org')); assert.match(KINDS.element.why('@kit:matrix.org'), /vizerunok\.org/);
   assert.ok(KINDS.discord.ok('tyl_2mb')); assert.ok(KINDS.discord.ok('Old User#1234')); assert.ok(!KINDS.discord.ok('a'));
 });
 
@@ -276,8 +278,10 @@ test('телефон: українські номери — рівно 9 циф�
 });
 
 test('Element: посилання matrix.to та повний MXID → нікнейм; «https» не проходить', () => {
-  assert.equal(KINDS.element.norm('https://matrix.to/#/@kit:matrix.org'), 'kit');
-  assert.equal(KINDS.element.norm('@kit.07:example.com:8448'), 'kit.07');
+  assert.equal(KINDS.element.norm('https://matrix.to/#/@kit:vizerunok.org'), 'kit');
+  assert.equal(KINDS.element.norm('@kit.07:VIZERUNOK.org:8448'), 'kit.07');
+  assert.equal(KINDS.element.norm('kit:vizerunok.org'), 'kit');
+  assert.ok(!KINDS.element.ok(KINDS.element.norm('https://matrix.to/#/@kit:matrix.org')), 'посилання на інший сервер не проходить');
   assert.equal(KINDS.element.norm('kit'), 'kit');
   const bad = KINDS.element.norm('https://example.com/room');
   assert.ok(!KINDS.element.ok(bad));
@@ -372,4 +376,27 @@ test('порівняння з попереднім звітом', () => {
   const n = clone(); n.points[0].nrk = 'Немає';
   const rn = diffAnswers(base, normalizeData(n));
   assert.equal(rn.changes.get('points.0.nrk_count'), '2'); assert.equal(rn.changes.get('points.0.nrk'), 'Є');
+});
+
+test('точність координат — 10 м; нереальні кількості — попередження', () => {
+  const d = clone();
+  d.points[0].coords = '37U DQ 123 678';
+  assert.ok(warns(d).some(w => w.path === 'points.0.coords' && /10 м/.test(w.msg)), '6 цифр — попередження');
+  d.points[0].coords = '37U DQ 1234 6789';
+  assert.ok(!warns(d).some(w => w.path === 'points.0.coords' && /10 м/.test(w.msg)), '8 цифр — гаразд');
+  d.mp_coords = '37U DQ 15 70'; d.positions[0].coords = '37U DQ 111 222';
+  assert.ok(warns(d).some(w => w.path === 'mp_coords' && /10 м/.test(w.msg)));
+  assert.ok(warns(d).some(w => w.path === 'positions.0.coords' && /10 м/.test(w.msg)));
+  assert.equal(errs(d).length, 0, 'це попередження, а не помилки');
+  d.points[0].training_asm = '120'; d.points[0].nrk_count = '25';
+  assert.ok(warns(d).some(w => w.path === 'points.0.training_asm' && /50 осіб/.test(w.msg)));
+  assert.ok(warns(d).some(w => w.path === 'points.0.nrk_count' && /10 НРК/.test(w.msg)));
+});
+
+test('Element на іншому сервері — помилка з поясненням', () => {
+  const d = clone(); d.kb_element = '@berkut:matrix.org';
+  const e = errs(d).find(x => x.path === 'kb_element');
+  assert.ok(e); assert.match(e.msg, /Потрібен акаунт на сервері vizerunok\.org/);
+  d.kb_element = '@berkut:vizerunok.org';
+  assert.equal(errs(d).length, 0); assert.equal(normalizeData(d).kb_element, 'berkut');
 });

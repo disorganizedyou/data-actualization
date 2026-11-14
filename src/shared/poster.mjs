@@ -110,28 +110,31 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
 export function buildContactsSheet(reports, { version = '' } = {}) {
   const k = kit(1), { z, val, sec } = k;
   const rows = reports.map(r => r.data);
-  const CW = +((PAGE.cw - 60 - 6 - 3 * 12) / 3).toFixed(1), wrap = k.wrapTo(CW - 30, z(8));
-  const cell = (d, role) => ({ stack: [
-    { text: hasText(d[`${role}_callsign`]) ? d[`${role}_callsign`].trim() : '—', bold: true, fontSize: z(9.5) },
+  // стовпчики: підрозділ (з координатами медпункту) · три чергові · начальник медпункту
+  const UW = 86, COLS = [...ROLES.map(r => r.role), 'mphead'];
+  const CW = +((PAGE.cw - UW - 6 - COLS.length * 12) / COLS.length).toFixed(1), wrap = k.wrapTo(CW - 14, z(7.5));
+  const cell = (d, who) => ({ stack: [
+    { text: hasText(d[`${who}_callsign`]) ? d[`${who}_callsign`].trim() : '—', bold: true, fontSize: z(9) },
     ...CONTACT.filter(c => c.icon).map(c => ({ columnGap: z(4), columns: [
-      { svg: iconSvg(c.icon, C.grey), width: z(7), height: z(7), margin: [0, z(1.5), 0, 0] },
-      { width: '*', ...val(wrap(d[`${role}_${c.k}`]), z(8)) }] })),
+      { svg: iconSvg(c.icon, C.grey), width: z(6.5), height: z(6.5), margin: [0, z(1.2), 0, 0] },
+      { width: '*', ...val(wrap(d[`${who}_${c.k}`]), z(7.5)), lineHeight: 1.1 }] })),
   ] });
+  const headCell = (badgeRole, name) => ({ columnGap: z(5), columns: [k.badge(badgeRole, z(14)), { width: '*', text: name, bold: true, fontSize: z(8.5) }] });
   return {
     pageSize: 'A4', pageMargins: [PAGE.m, PAGE.m, PAGE.m, 40],
-    info: { title: 'Чергові підрозділів — зведення', creator: `Медслужба — плакати ${version}`.trim(), producer: 'pdfmake' },
+    info: { title: 'Чергові та начальники медпунктів — зведення', creator: `Медслужба — плакати ${version}`.trim(), producer: 'pdfmake' },
     defaultStyle: { font: 'eU', fontSize: 9, lineHeight: 1.15, color: C.ink },
     content: [
-      { text: 'Чергові підрозділів', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
-      { text: `${rows.length === 1 ? 'Зі звіту 1 підрозділу' : `Зі звітів ${rows.length} ${plural(rows.length, 'підрозділу', 'підрозділів', 'підрозділів')}`} · службові контакти чергових акаунтів`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
-      sec('Контакти'),
-      { layout: k.lines(true, 5), table: { headerRows: 1, dontBreakRows: true, widths: [60, CW, CW, CW],
-        body: [[{ text: 'Підрозділ', color: C.grey, fontSize: z(7.5) }, ...ROLES.map(r => ({ columnGap: z(5), columns: [k.badge(r.role, z(14)), { width: '*', text: ROLE_STYLE[r.role].name, bold: true, fontSize: z(8.5) }] }))],
-          ...rows.map(d => [{ stack: [{ text: hasText(d.unit) ? d.unit.trim().toUpperCase() : '—', font: THEME.head, bold: true, fontSize: z(12) }, { text: fmtDate(d.date), color: C.grey, fontSize: z(7) }] },
-            ...ROLES.map(r => cell(d, r.role))])] } },
+      { text: 'Чергові та начальники медпунктів', font: THEME.head, bold: true, fontSize: z(17), lineHeight: 1 },
+      { text: `${rows.length === 1 ? 'Зі звіту 1 підрозділу' : `Зі звітів ${rows.length} ${plural(rows.length, 'підрозділу', 'підрозділів', 'підрозділів')}`} · чергові — службові контакти, начальник медпункту — особисті`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      { margin: [0, z(14), 0, 0], layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true, widths: [UW, ...COLS.map(() => CW)],
+        body: [[{ text: 'Підрозділ', color: C.grey, fontSize: z(7.5) }, ...ROLES.map(r => headCell(r.role, ROLE_STYLE[r.role].name)), headCell('mp', 'Начальник медпункту')],
+          ...rows.map(d => [{ stack: [{ text: hasText(d.unit) ? d.unit.trim().toUpperCase() : '—', font: THEME.head, bold: true, fontSize: z(12) }, { text: fmtDate(d.date), color: C.grey, fontSize: z(7) },
+            ...(hasText(d.mp_coords) ? [{ text: 'МП ' + d.mp_coords.trim(), color: C.grey, fontSize: z(6), noWrap: true, margin: [0, z(3), 0, 0] }] : [])] },
+            ...COLS.map(who => cell(d, who))])] } },
     ],
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: 'Зведення контактів чергових. Дата біля назви підрозділу — дата актуальності його звіту.' },
+      { text: 'Зведення контактів чергових і начальників медпунктів. Під назвою підрозділу — дата актуальності його звіту й координати медпункту.' },
       { text: total > 1 ? `${cur} / ${total}` : '', alignment: 'right', width: 40 }] }),
   };
 }

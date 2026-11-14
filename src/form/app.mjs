@@ -10,6 +10,7 @@ import { loadFonts } from './pdfkit.mjs';
 import { iconSvg } from './icons.mjs';
 
 const DRAFT_KEY = 'med-anketa-draft-v2';
+const PREFS_KEY = 'med-anketa-prefs';
 const DRAFT_TTL_DAYS = 2;
 const WARN_ACK_PREFIX = 'ack:';
 const MAX_PDF_BYTES = 50 * 1024 * 1024;
@@ -37,6 +38,19 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const app = $('#app');
 const finePointer = () => { try { return matchMedia('(pointer: fine)').matches; } catch { return false; } };
+
+// Робоча копія в браузері: на телефоні — увімкнено, на комп’ютері — вимкнено (він може бути спільним), доки людина не ввімкне сама
+function loadAutosave() {
+  try { const p = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); if (typeof p.autosave === 'boolean') return p.autosave; } catch { /* немає сховища */ }
+  try { return matchMedia('(pointer: coarse)').matches; } catch { return false; }
+}
+let autosave = loadAutosave();
+let warnedNoSave = false;      // повідомлення «робоча копія не зберігається» вже показано
+function setAutosave(on) {
+  autosave = on;
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({ autosave: on })); } catch { /* ignore */ }
+  if (on) { dropNotice('nosave'); saveDraft(); } else clearDraft();
+}
 
 // ---------- доступ до даних за шляхом ----------
 const parsePath = path => {
@@ -232,6 +246,7 @@ function checkHtml() {
       <p class="rule"><b>Готовий PDF передавайте виключно через Element</b> черговому медичної служби. Передача будь-якими іншими месенджерами суворо заборонена.</p>
       <div class="draftrow"><button type="button" class="btn" id="draft">Зберегти чернетку PDF</button>
         <p class="hint">Чернетку можна відкрити в цій формі пізніше й продовжити. Для подання вона не придатна — на ній є позначка «ЧЕРНЕТКА».</p></div>
+      <p class="ver">Версія анкети: ${esc(BUILD_VERSION)}</p>
     </div>
   </section>`;
 }
@@ -370,8 +385,11 @@ function introHtml() {
       <li>Готовий PDF надішліть черговому медслужби <b>лише через Element</b>. Інші месенджери заборонені.</li>
       <li>На комп’ютері <b>Ctrl+Enter</b> (на Mac — <b>⌘+Enter</b>) — те саме, що кнопка «Далі».</li>
       <li>Наступного разу не починайте з нуля: натисніть <b>«Відкрити PDF»</b> і завантажте попередній звіт або чернетку — дані підставляться у форму.</li>
-      <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}, якщо браузер це дозволяє. Копія видаляється після завантаження звіту або кнопкою «Очистити».</li>
-    </ol></details>`;
+      <li>Щоб не втратити введене, зберігайте <b>чернетку PDF</b> на кроці «Перевірка та звіт». Якщо ввімкнено збереження нижче, браузер також тримає робочу копію на цьому пристрої до ${DRAFT_TTL_DAYS} ${plural(DRAFT_TTL_DAYS, 'дня', 'днів', 'днів')}; вона видаляється після завантаження звіту або кнопкою «Очистити».</li>
+    </ol>
+    <label class="ackl pref"><input type="checkbox" id="autosave"${autosave ? ' checked' : ''}> <span>Зберігати робочу копію в цьому браузері</span></label>
+    <p class="hint">Не вмикайте на комп’ютері, яким користуються інші люди.</p>
+    <p class="ver">Версія анкети: ${esc(BUILD_VERSION)}</p></details>`;
 }
 
 // ---------- помилки у полях ----------
@@ -489,6 +507,10 @@ function selectSeg(btn, { keyboard = false } = {}) {
 app.addEventListener('input', e => {
   const el = e.target;
   if (!el.dataset.path) return;
+  if (!autosave && !warnedNoSave) {
+    warnedNoSave = true;
+    addNotice('nosave', 'info', 'Робоча копія на цьому комп’ютері не зберігається. Щоб не втратити введене, зберігайте чернетку PDF. Якщо комп’ютер лише ваш — увімкніть збереження у розділі «Як працює анкета» на першому кроці.');
+  }
   setAt(el.dataset.path, el.value);
   if (el.tagName === 'TEXTAREA') counter(el);
   const groupPath = el.closest('.group')?.dataset.field;
@@ -519,6 +541,7 @@ app.addEventListener('change', e => {
     touched.add(path);
     refreshErrors(); scheduleAutosave();
   }
+  if (el.id === 'autosave') { setAutosave(el.checked); toast(el.checked ? 'Робочу копію зберігатиметься в цьому браузері.' : 'Робочу копію вимкнено й видалено з цього браузера.'); return; }
   if (el.id === 'onlychg') { onlyChanged = el.checked; $('#review', app)?.classList.toggle('only', onlyChanged); return; }
   if (el.dataset.ack) {
     if (el.checked) ack.add(el.dataset.ack); else ack.delete(el.dataset.ack);
@@ -669,22 +692,22 @@ function gotoPath(path, { flash = true } = {}) {
     step = st; render({ keepScroll: !changed });
     if (changed) pushHistory();
   }
-  requestAnimationFrame(() => {
-    const el = app.querySelector(`[data-path="${CSS.escape(path)}"]`) || app.querySelector(`[data-field="${CSS.escape(path)}"]`) || app.querySelector(`[data-list="${CSS.escape(path)}"]`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const box = el.closest('.fld') || el;
-    const focusable = el.matches('input:not([disabled]),textarea,select') ? el : firstFocusable(box) || box.querySelector('.seg-btn') || box.querySelector('input[type=checkbox]');
-    focusable?.focus({ preventScroll: true });
-    if (flash) { box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1600); }
-  });
+  // курсор — одразу (розмітка вже на місці), щоб набране відразу після натискання не пішло повз поле
+  const el = app.querySelector(`[data-path="${CSS.escape(path)}"]`) || app.querySelector(`[data-field="${CSS.escape(path)}"]`) || app.querySelector(`[data-list="${CSS.escape(path)}"]`);
+  if (!el) return;
+  const box = el.closest('.fld') || el;
+  const focusable = el.matches('input:not([disabled]),textarea,select') ? el : firstFocusable(box) || box.querySelector('.seg-btn') || box.querySelector('input[type=checkbox]');
+  focusable?.focus({ preventScroll: true });
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (flash) { box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1600); }
 }
 
 // ---------- робоча копія на пристрої ----------
 let saveTimer = null;
-function scheduleAutosave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveDraft, 600); }
+function scheduleAutosave() { clearTimeout(saveTimer); if (autosave) saveTimer = setTimeout(saveDraft, 600); }
 function saveDraft() {
   clearTimeout(saveTimer);
+  if (!autosave) return;
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ saved: new Date().toISOString(), step, attempted: [...attempted], data, baseline, unreviewed: [...unreviewed] })); draftOk = true; }
   catch { if (draftOk) { draftOk = false; addNotice('nostore', 'warn', 'Браузер не дозволяє зберігати робочу копію на цьому пристрої. Зберігайте чернетку PDF, щоб не втратити введене.'); } }
 }
@@ -734,7 +757,7 @@ async function download(kind) {
     dirty = false;
     if (kind === 'report') {
       clearDraft();     // звіт сформовано — робоча копія на пристрої більше не потрібна
-      addNotice('saved', 'ok', `Звіт збережено: ${name}. Надішліть його черговому медслужби через Element.`);
+      addNotice('saved', 'ok', `Звіт збережено: ${name}. Надішліть його черговому медслужби через Element. На спільному комп’ютері після цього видаліть файл із «Завантажень» і натисніть «Очистити».`);
     } else toast(`Чернетку збережено: ${name}`, 7000);
   } catch (e) { console.error(e); alert('Не вдалося створити PDF: ' + (e && e.message || e)); }
   finally { btn.textContent = text; render({ keepScroll: true }); }
@@ -794,6 +817,7 @@ function toast(msg, ms = 5000) {
     attempted = new Set(draft.attempted); baseline = draft.baseline; unreviewed = new Set(draft.unreviewed);
     goStep(Math.min(Math.max(0, draft.step), STEPS.length - 1), { push: false });
     addNotice('restored', 'info', `Відновлено робочу копію з цього пристрою (${new Date(draft.saved).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' })}). Щоб почати з нуля — натисніть «Очистити».`);
+    if (!autosave) clearDraft();
   } else { reset(); focusStepStart(); }
   replaceHistory();
 })();

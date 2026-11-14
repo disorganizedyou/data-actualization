@@ -2,7 +2,7 @@
 // Чиста логіка без DOM — використовується формою, інструментом медслужби й тестами.
 
 import { SECTIONS, LEVELS, ROLES, CONTACT, NONE, SCHEMA_VERSION, POINT_FIELDS, POSITION_FIELDS,
-  groupKeys, visible, required, stepOfSection, listDef, dropsDone, LIST_KEYS, HEAD_CONTACTS, MEDPOINT_FIELD_KEYS, UNIT_CODES } from './schema.mjs';
+  groupKeys, visible, required, stepOfSection, listDef, dropsDone, LIST_KEYS, HEAD_CONTACTS, MEDPOINT_FIELD_KEYS, UNIT_CODES, ELEMENT_SERVER } from './schema.mjs';
 import { hasText, daysBetween, todayISO, plural } from './text.mjs';
 
 export const MAX_IMPORT_STRING = 2000;   // жорсткий ліміт довжини рядка при імпорті з файла/чернетки
@@ -40,18 +40,24 @@ export function isCoords(v) {
   const m = v.match(MGRS_RE);
   return !!m && +m[1] >= 1 && +m[1] <= 60 && m[4].length === m[5].length;
 }
+// Скільки цифр у правильному MGRS (10 — 1 м, 8 — 10 м, 6 — 100 м…); 0 — якщо формат неправильний
+export const coordsDigits = v => { const m = String(v ?? '').match(MGRS_RE); return m ? m[4].length * 2 : 0; };
+export const COORDS_MIN_DIGITS = 8;              // точність 10 м (рішення медслужби)
 // Чи координати схожі на українські (зони 34–37, смуги T та U). Лише для попередження.
 export const coordsInUkraine = v => { const m = v.match(MGRS_RE); return !m || (+m[1] >= 34 && +m[1] <= 37 && 'TU'.includes(m[2])); };
 
 const intNorm = v => { const t = v.trim(); return /^\d+$/.test(t) ? String(parseInt(t, 10)) : t; };
-// Element: приймаємо нікнейм, @нік:сервер або посилання matrix.to — зберігаємо лише нікнейм (локальну частину)
+// Element: приймаємо нікнейм, @нік:сервер або посилання matrix.to — зберігаємо лише нікнейм (локальну частину).
+// Сервер має бути ELEMENT_SERVER; адресу з іншим сервером лишаємо як є, щоб перевірка її відхилила.
 const MXID_RE = /@([a-z0-9._=\-\/+]+):([a-z0-9.\-]+(?::\d+)?)/i;
+const ourServer = host => host.replace(/:\d+$/, '').toLowerCase() === ELEMENT_SERVER;
 function normElement(v) {
   const s = v.trim();
   const m = s.match(MXID_RE);
-  if (m) return m[1];
+  if (m) return ourServer(m[2]) ? m[1] : s;
   if (/^https?:|matrix\.to|[\/#?]/i.test(s)) return s;            // посилання — хай ok() відхилить з підказкою
-  return s.replace(/^@/, '').replace(/:.*$/, '');
+  const local = s.replace(/^@/, ''), at = local.indexOf(':');
+  return at < 0 ? local : ourServer(local.slice(at + 1)) ? local.slice(0, at) : s;
 }
 
 const unitKey = s => s.replace(/[\s.\-]/g, '');
@@ -70,7 +76,9 @@ export const KINDS = {
     msg: 'Номер телефону або ім’я користувача Signal (наприклад, kit.07)' },
   element: { ph: 'нікнейм, наприклад kit', norm: normElement,
     ok: v => /^[a-z0-9._=\-\/+]{1,60}$/i.test(v) && !/^https?$/i.test(v) && !v.includes('/'),
-    msg: 'Лише нікнейм в Element, без @, сервера й посилань (наприклад, kit)' },
+    // окреме пояснення, якщо вказано акаунт на іншому сервері
+    why: v => /:[a-z0-9\-]+\.[a-z]/i.test(v) ? `Потрібен акаунт на сервері ${ELEMENT_SERVER}` : '',
+    msg: `Лише нікнейм на сервері ${ELEMENT_SERVER}, без @ і посилань (наприклад, kit)` },
   discord: { ph: 'ім’я користувача', norm: v => v.trim().replace(/^@/, ''),
     ok: v => /^[a-z0-9_.]{2,32}$/i.test(v) || /^.{2,32}#\d{4}$/.test(v),
     msg: 'Ім’я користувача Discord: латинські літери, цифри, крапка та «_»' },
@@ -175,7 +183,7 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
   if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, f.t === 'sel' ? `«${v}» немає у списку — оберіть зі списку` : 'Недопустиме значення — оберіть зі списку'); return; }
   if (f.t === 'date' && !validISODate(v)) { push(p, 'Некоректна дата'); return; }
   const kind = kindOf(f);
-  if (kind && !kind.ok(v.trim())) push(p, kind.msg);
+  if (kind && !kind.ok(v.trim())) push(p, kind.why?.(v.trim()) || kind.msg);
   else if (kind === KINDS.count && f.min != null && +v < f.min) push(p, `Не менше ${f.min}`);
 }
 
@@ -211,9 +219,13 @@ function crossChecks(d, problems, today) {
     const vals = CONTACT.filter(c => c.none).map(c => d[`${r.role}_${c.k}`]);
     if (vals.length && vals.every(v => v === NONE)) push('error', `${r.role}_phone`, r.role, undefined, r.title, 'Потрібен хоча б один спосіб зв’язку з черговим');
   }
+  // Координати грубші за 10 м — попередження (точне місце важливе для евакуації й скидів)
+  const coarse = (v, path, sec, i, label) => { if (hasText(v) && isCoords(v) && coordsDigits(v) < COORDS_MIN_DIGITS)
+    push('warn', path, sec, i, label, 'Точність координат грубша за 10 м — вкажіть 8 або 10 цифр (наприклад, 37U DQ 1234 5678)'); };
   // Медпункт
   if (hasText(d.mp_coords) && isCoords(d.mp_coords) && !coordsInUkraine(d.mp_coords))
     push('warn', 'mp_coords', 'mploc', undefined, 'Координати медпункту', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
+  coarse(d.mp_coords, 'mp_coords', 'mploc', undefined, 'Координати медпункту');
   if (HEAD_CONTACTS.every(c => d[c.k] === NONE))
     push('error', HEAD_CONTACTS[0].k, 'mphead', undefined, 'Начальник медпункту', 'Потрібен хоча б один спосіб зв’язку з начальником медпункту');
   // Точки
@@ -226,6 +238,11 @@ function crossChecks(d, problems, today) {
       if (seenCoords.has(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', `Ті самі координати, що й у точки ${seenCoords.get(c) + 1}`); else seenCoords.set(c, i);
       if (!coordsInUkraine(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
     }
+    coarse(c, `points.${i}.coords`, 'points', i, 'Координати');
+    // кількості, яких на одній точці майже не буває, — перепитуємо
+    for (const [k, , short] of LEVELS) if (+p[`training_${k}`] > 50)
+      push('warn', `points.${i}.training_${k}`, 'points', i, `Підготовка — ${short}`, 'Понад 50 осіб на одному рівні — перевірте число');
+    if (p.nrk === 'Є' && +p.nrk_count > 10) push('warn', `points.${i}.nrk_count`, 'points', i, 'Кількість НРК', 'Понад 10 НРК на точці — перевірте число');
   });
   // Позиції
   const pos = Array.isArray(d.positions) && d.drops === 'Так' ? d.positions : [];
@@ -235,6 +252,7 @@ function crossChecks(d, problems, today) {
     if (n) { if (seenPos.has(n)) push('error', `positions.${i}.name`, 'drops', i, 'Назва або позивний позиції', `Така сама назва, як у позиції ${seenPos.get(n) + 1}`); else seenPos.set(n, i); }
     if (hasText(p.coords) && isCoords(p.coords) && !coordsInUkraine(p.coords))
       push('warn', `positions.${i}.coords`, 'drops', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
+    coarse(p.coords, `positions.${i}.coords`, 'drops', i, 'Координати');
   });
   if (dropsDone(d) && hasText(d.algo_time) && KINDS.min.ok(d.algo_time) && +d.algo_time > 240)
     push('warn', 'algo_time', 'algo', undefined, 'Орієнтовний час від запиту до скиду', 'Понад 4 години від запиту до скиду — перевірте, чи число в хвилинах');

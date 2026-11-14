@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-jguxIbSvCIpAVx9mR/ft/IteOfSNhgO/sQiiM5KV+ls='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-PmRRijsCMDpD5LsbNzggPUtGYDp3TX1zeZfVfhJVU7Y='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Медслужба — плакати зі звітів підрозділів</title>
 <style>
 :root {
@@ -49,6 +49,9 @@ b { font-weight: 600; }
 .tbl td small { display: block; color: var(--mute); font-size: 12px; }
 .tbl .unit { font: 600 17px/1.2 var(--head); }
 .tbl .st { display: flex; flex-wrap: wrap; gap: 4px; }
+.tbl .badge { white-space: normal; display: inline-block; }
+.tbl td:nth-child(4) { min-width: 120px; max-width: 220px; }
+.tbl td:nth-child(5) { max-width: 130px; }
 .details li.note { color: var(--mute); }
 .tbl .act { white-space: nowrap; text-align: right; }
 .tbl .act .btn { margin-left: 4px; }
@@ -76,6 +79,14 @@ b { font-weight: 600; }
 .toast { position: fixed; left: 16px; right: 16px; bottom: 20px; z-index: 20; max-width: 560px; margin: 0 auto; background: var(--ink); color: #fff; padding: 12px 16px; border-radius: var(--r-s); font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
 @media (max-width: 760px) { .tbl thead { display: none; } .tbl tr { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); } .tbl td { border: 0; padding: 2px 0; } .tbl .act { grid-column: 1 / -1; text-align: left; } .det td { grid-column: 1 / -1; } }
 
+.details h4.sub { margin-top: 14px; }
+dialog.choose { border: 0; border-radius: 12px; padding: 20px 22px; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,.25); font: inherit; color: inherit; }
+dialog.choose::backdrop { background: rgba(15,23,32,.45); }
+dialog.choose h3 { font-size: 18px; margin-bottom: 8px; }
+dialog.choose p { color: #45505c; margin-bottom: 16px; line-height: 1.45; }
+.choose-b { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 1100px) { .tbl .act { white-space: normal; min-width: 150px; } .tbl .act .btn { margin: 2px 0 2px 4px; } }
+
 </style>
 </head>
 <body>
@@ -98,7 +109,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "v2-37b795a";
+const BUILD_VERSION = "2026.11.1-baae6cb";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -214,6 +225,9 @@ const UNIT_CODES = UNITS.map(u => u[0]);
 // Повна назва підрозділу за короткою ('' — якщо такого в списку немає)
 const unitName = code => (UNITS.find(u => u[0] === String(code ?? '').trim().toUpperCase()) || [])[1] || '';
 
+// Сервер Element, на якому мають акаунти всі чергові (рішення медслужби). Анкета зберігає лише нікнейм.
+const ELEMENT_SERVER = 'vizerunok.org';
+
 const OPT = {
   yn: ['Так', 'Ні'],
   ypn: ['Так', 'Частково', 'Ні'],
@@ -237,7 +251,7 @@ const CONTACT = [
   { k: 'callsign', l: 'Позивний чергового', pl: 'Позивний', v: 'callsign', max: 30, req: true, ph: 'наприклад: Сокіл', w: 6 },
   { k: 'phone', l: 'WhatsApp', icon: 'whatsapp', v: 'phone', none: true, req: true },
   { k: 'signal', l: 'Signal', icon: 'signal', v: 'signal', none: true, req: true },
-  { k: 'element', l: 'Element', icon: 'element', v: 'element', none: true, req: true },
+  { k: 'element', l: 'Element', icon: 'element', v: 'element', none: true, req: true, hint: `Сервер — ${ELEMENT_SERVER}` },
   { k: 'discord', l: 'Discord', icon: 'discord', v: 'discord', none: true, req: true },
 ];
 
@@ -440,18 +454,24 @@ function isCoords(v) {
   const m = v.match(MGRS_RE);
   return !!m && +m[1] >= 1 && +m[1] <= 60 && m[4].length === m[5].length;
 }
+// Скільки цифр у правильному MGRS (10 — 1 м, 8 — 10 м, 6 — 100 м…); 0 — якщо формат неправильний
+const coordsDigits = v => { const m = String(v ?? '').match(MGRS_RE); return m ? m[4].length * 2 : 0; };
+const COORDS_MIN_DIGITS = 8;              // точність 10 м (рішення медслужби)
 // Чи координати схожі на українські (зони 34–37, смуги T та U). Лише для попередження.
 const coordsInUkraine = v => { const m = v.match(MGRS_RE); return !m || (+m[1] >= 34 && +m[1] <= 37 && 'TU'.includes(m[2])); };
 
 const intNorm = v => { const t = v.trim(); return /^\d+$/.test(t) ? String(parseInt(t, 10)) : t; };
-// Element: приймаємо нікнейм, @нік:сервер або посилання matrix.to — зберігаємо лише нікнейм (локальну частину)
+// Element: приймаємо нікнейм, @нік:сервер або посилання matrix.to — зберігаємо лише нікнейм (локальну частину).
+// Сервер має бути ELEMENT_SERVER; адресу з іншим сервером лишаємо як є, щоб перевірка її відхилила.
 const MXID_RE = /@([a-z0-9._=\-\/+]+):([a-z0-9.\-]+(?::\d+)?)/i;
+const ourServer = host => host.replace(/:\d+$/, '').toLowerCase() === ELEMENT_SERVER;
 function normElement(v) {
   const s = v.trim();
   const m = s.match(MXID_RE);
-  if (m) return m[1];
+  if (m) return ourServer(m[2]) ? m[1] : s;
   if (/^https?:|matrix\.to|[\/#?]/i.test(s)) return s;            // посилання — хай ok() відхилить з підказкою
-  return s.replace(/^@/, '').replace(/:.*$/, '');
+  const local = s.replace(/^@/, ''), at = local.indexOf(':');
+  return at < 0 ? local : ourServer(local.slice(at + 1)) ? local.slice(0, at) : s;
 }
 
 const unitKey = s => s.replace(/[\s.\-]/g, '');
@@ -470,7 +490,9 @@ const KINDS = {
     msg: 'Номер телефону або ім’я користувача Signal (наприклад, kit.07)' },
   element: { ph: 'нікнейм, наприклад kit', norm: normElement,
     ok: v => /^[a-z0-9._=\-\/+]{1,60}$/i.test(v) && !/^https?$/i.test(v) && !v.includes('/'),
-    msg: 'Лише нікнейм в Element, без @, сервера й посилань (наприклад, kit)' },
+    // окреме пояснення, якщо вказано акаунт на іншому сервері
+    why: v => /:[a-z0-9\-]+\.[a-z]/i.test(v) ? `Потрібен акаунт на сервері ${ELEMENT_SERVER}` : '',
+    msg: `Лише нікнейм на сервері ${ELEMENT_SERVER}, без @ і посилань (наприклад, kit)` },
   discord: { ph: 'ім’я користувача', norm: v => v.trim().replace(/^@/, ''),
     ok: v => /^[a-z0-9_.]{2,32}$/i.test(v) || /^.{2,32}#\d{4}$/.test(v),
     msg: 'Ім’я користувача Discord: латинські літери, цифри, крапка та «_»' },
@@ -575,7 +597,7 @@ function checkValue(f, item, data, path, sectionId, idx, label, problems) {
   if ((f.t === 'seg' || f.t === 'sel') && !f.o.includes(v)) { push(p, f.t === 'sel' ? `«${v}» немає у списку — оберіть зі списку` : 'Недопустиме значення — оберіть зі списку'); return; }
   if (f.t === 'date' && !validISODate(v)) { push(p, 'Некоректна дата'); return; }
   const kind = kindOf(f);
-  if (kind && !kind.ok(v.trim())) push(p, kind.msg);
+  if (kind && !kind.ok(v.trim())) push(p, kind.why?.(v.trim()) || kind.msg);
   else if (kind === KINDS.count && f.min != null && +v < f.min) push(p, `Не менше ${f.min}`);
 }
 
@@ -611,9 +633,13 @@ function crossChecks(d, problems, today) {
     const vals = CONTACT.filter(c => c.none).map(c => d[`${r.role}_${c.k}`]);
     if (vals.length && vals.every(v => v === NONE)) push('error', `${r.role}_phone`, r.role, undefined, r.title, 'Потрібен хоча б один спосіб зв’язку з черговим');
   }
+  // Координати грубші за 10 м — попередження (точне місце важливе для евакуації й скидів)
+  const coarse = (v, path, sec, i, label) => { if (hasText(v) && isCoords(v) && coordsDigits(v) < COORDS_MIN_DIGITS)
+    push('warn', path, sec, i, label, 'Точність координат грубша за 10 м — вкажіть 8 або 10 цифр (наприклад, 37U DQ 1234 5678)'); };
   // Медпункт
   if (hasText(d.mp_coords) && isCoords(d.mp_coords) && !coordsInUkraine(d.mp_coords))
     push('warn', 'mp_coords', 'mploc', undefined, 'Координати медпункту', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
+  coarse(d.mp_coords, 'mp_coords', 'mploc', undefined, 'Координати медпункту');
   if (HEAD_CONTACTS.every(c => d[c.k] === NONE))
     push('error', HEAD_CONTACTS[0].k, 'mphead', undefined, 'Начальник медпункту', 'Потрібен хоча б один спосіб зв’язку з начальником медпункту');
   // Точки
@@ -626,6 +652,11 @@ function crossChecks(d, problems, today) {
       if (seenCoords.has(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', `Ті самі координати, що й у точки ${seenCoords.get(c) + 1}`); else seenCoords.set(c, i);
       if (!coordsInUkraine(c)) push('warn', `points.${i}.coords`, 'points', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
     }
+    coarse(c, `points.${i}.coords`, 'points', i, 'Координати');
+    // кількості, яких на одній точці майже не буває, — перепитуємо
+    for (const [k, , short] of LEVELS) if (+p[`training_${k}`] > 50)
+      push('warn', `points.${i}.training_${k}`, 'points', i, `Підготовка — ${short}`, 'Понад 50 осіб на одному рівні — перевірте число');
+    if (p.nrk === 'Є' && +p.nrk_count > 10) push('warn', `points.${i}.nrk_count`, 'points', i, 'Кількість НРК', 'Понад 10 НРК на точці — перевірте число');
   });
   // Позиції
   const pos = Array.isArray(d.positions) && d.drops === 'Так' ? d.positions : [];
@@ -635,6 +666,7 @@ function crossChecks(d, problems, today) {
     if (n) { if (seenPos.has(n)) push('error', `positions.${i}.name`, 'drops', i, 'Назва або позивний позиції', `Така сама назва, як у позиції ${seenPos.get(n) + 1}`); else seenPos.set(n, i); }
     if (hasText(p.coords) && isCoords(p.coords) && !coordsInUkraine(p.coords))
       push('warn', `positions.${i}.coords`, 'drops', i, 'Координати', 'Координати поза звичними для України зонами (34–37, смуги T/U) — перевірте');
+    coarse(p.coords, `positions.${i}.coords`, 'drops', i, 'Координати');
   });
   if (dropsDone(d) && hasText(d.algo_time) && KINDS.min.ok(d.algo_time) && +d.algo_time > 240)
     push('warn', 'algo_time', 'algo', undefined, 'Орієнтовний час від запиту до скиду', 'Понад 4 години від запиту до скиду — перевірте, чи число в хвилинах');
@@ -705,8 +737,10 @@ function crc32(bytes) {
 
 // ---- Конверт ----
 // kind: 'report' — повний перевірений звіт; 'draft' — чернетка (може містити помилки)
-function makePayload(data, { kind = 'report', created } = {}) {
-  return { app: 'med-data-actualization', v: SCHEMA_VERSION, kind, created, data: normalizeData(data) };
+// build — версія збірки анкети, якою заповнено дані (щоб медслужба бачила застарілі анкети)
+const BUILD_RE = /^[\w.\-+]{1,40}$/;
+function makePayload(data, { kind = 'report', created, build } = {}) {
+  return { app: 'med-data-actualization', v: SCHEMA_VERSION, kind, created, ...(BUILD_RE.test(build || '') ? { build } : {}), data: normalizeData(data) };
 }
 function encodePayload(payload) {
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
@@ -720,7 +754,8 @@ function parsePayload(text) {
   if (p.app !== 'med-data-actualization') return { v: 1, kind: 'report', data: migrate(p, 1), legacy: true };
   if (typeof p.v !== 'number' || p.v > SCHEMA_VERSION) throw new Error('Файл створено новішою версією форми — оновіть форму');
   if (!p.data || typeof p.data !== 'object' || Array.isArray(p.data)) throw new Error('Пошкоджені дані у файлі');
-  return { v: p.v, kind: p.kind === 'draft' ? 'draft' : 'report', created: typeof p.created === 'string' ? p.created : undefined, data: migrate(p.data, p.v) };
+  return { v: p.v, kind: p.kind === 'draft' ? 'draft' : 'report', created: typeof p.created === 'string' ? p.created : undefined,
+    build: typeof p.build === 'string' && BUILD_RE.test(p.build) ? p.build : undefined, data: migrate(p.data, p.v) };
 }
 
 // Міграція даних зі старіших версій схеми.
@@ -1022,8 +1057,10 @@ function collectNeeds(d) {
   return out;
 }
 
-// d — нормалізовані дані; opts.kind 'report' | 'draft'; opts.created — ISO-рядок часу формування; opts.version — версія збірки
-function buildReport(d, { kind = 'report', created = '', version = '', regenerated = '' } = {}) {
+// d — нормалізовані дані; opts.kind 'report' | 'draft'; opts.created — ISO-рядок часу формування;
+// opts.version — версія збірки, що формує PDF; opts.build — версія анкети, якою заповнено дані (за замовчуванням = version;
+// медслужба при повторному формуванні передає початкову)
+function buildReport(d, { kind = 'report', created = '', version = '', build = version, regenerated = '' } = {}) {
   const k = kit(1), { z, val, lab, sec, pill } = k;
   const pts = sectionById('points'), pos = sectionById('drops'), algo = sectionById('algo'), mp = sectionById('mphelp');
   const LW = +(PAGE.cw * .3).toFixed(1);
@@ -1109,6 +1146,7 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     sec('Контакти чергових'),
     { text: 'Службові контакти чергових акаунтів, а не особисті контакти військовослужбовців.', color: C.grey, margin: [0, 0, 0, z(6)] },
     contacts,
+    { text: `Element — сервер ${ELEMENT_SERVER}`, color: C.grey, fontSize: z(7.5), margin: [0, z(4), 0, 0] },
     sec('Медичний пункт'), medpoint,
     sec('Зведення по точках передачі'),
     summary || { text: 'Точок не вказано', color: C.grey },
@@ -1120,7 +1158,7 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     sec(T(mp)), kv(mp.fields, d),
     sec('Потреби та зауваги'), needsBlock,
   ];
-  const payload = makePayload(d, { kind, created }), emb = pdfEmbedding(payload);
+  const payload = makePayload(d, { kind, created, build }), emb = pdfEmbedding(payload);
   const tag = [draft ? 'Чернетка' : 'Повний звіт', unit, fmtDate(d.date)].filter(hasText).join('  ·  ');
   return {
     pageSize: 'A4', pageMargins: [PAGE.m, 40, PAGE.m, 44], content, pageBreakBefore: keepHeadings,
@@ -1131,7 +1169,7 @@ function buildReport(d, { kind = 'report', created = '', version = '', regenerat
     ...(draft ? { background: () => ({ text: 'ЧЕРНЕТКА', color: '#f3d3d5', bold: true, fontSize: 78, font: THEME.head, alignment: 'center', margin: [0, 360, 0, 0] }) } : {}),
     header: cur => cur > 1 ? { margin: [PAGE.m, 18, PAGE.m, 0], fontSize: 7, color: C.grey, text: tag } : null,
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${version ? ` Форма ${version}.` : ''}` },
+      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${build ? ` Анкета ${build}.` : ''}` },
       { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }),
   };
 }
@@ -1248,28 +1286,31 @@ function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
 function buildContactsSheet(reports, { version = '' } = {}) {
   const k = kit(1), { z, val, sec } = k;
   const rows = reports.map(r => r.data);
-  const CW = +((PAGE.cw - 60 - 6 - 3 * 12) / 3).toFixed(1), wrap = k.wrapTo(CW - 30, z(8));
-  const cell = (d, role) => ({ stack: [
-    { text: hasText(d[`${role}_callsign`]) ? d[`${role}_callsign`].trim() : '—', bold: true, fontSize: z(9.5) },
+  // стовпчики: підрозділ (з координатами медпункту) · три чергові · начальник медпункту
+  const UW = 86, COLS = [...ROLES.map(r => r.role), 'mphead'];
+  const CW = +((PAGE.cw - UW - 6 - COLS.length * 12) / COLS.length).toFixed(1), wrap = k.wrapTo(CW - 14, z(7.5));
+  const cell = (d, who) => ({ stack: [
+    { text: hasText(d[`${who}_callsign`]) ? d[`${who}_callsign`].trim() : '—', bold: true, fontSize: z(9) },
     ...CONTACT.filter(c => c.icon).map(c => ({ columnGap: z(4), columns: [
-      { svg: iconSvg(c.icon, C.grey), width: z(7), height: z(7), margin: [0, z(1.5), 0, 0] },
-      { width: '*', ...val(wrap(d[`${role}_${c.k}`]), z(8)) }] })),
+      { svg: iconSvg(c.icon, C.grey), width: z(6.5), height: z(6.5), margin: [0, z(1.2), 0, 0] },
+      { width: '*', ...val(wrap(d[`${who}_${c.k}`]), z(7.5)), lineHeight: 1.1 }] })),
   ] });
+  const headCell = (badgeRole, name) => ({ columnGap: z(5), columns: [k.badge(badgeRole, z(14)), { width: '*', text: name, bold: true, fontSize: z(8.5) }] });
   return {
     pageSize: 'A4', pageMargins: [PAGE.m, PAGE.m, PAGE.m, 40],
-    info: { title: 'Чергові підрозділів — зведення', creator: `Медслужба — плакати ${version}`.trim(), producer: 'pdfmake' },
+    info: { title: 'Чергові та начальники медпунктів — зведення', creator: `Медслужба — плакати ${version}`.trim(), producer: 'pdfmake' },
     defaultStyle: { font: 'eU', fontSize: 9, lineHeight: 1.15, color: C.ink },
     content: [
-      { text: 'Чергові підрозділів', font: THEME.head, bold: true, fontSize: z(22), lineHeight: 1 },
-      { text: `${rows.length === 1 ? 'Зі звіту 1 підрозділу' : `Зі звітів ${rows.length} ${plural(rows.length, 'підрозділу', 'підрозділів', 'підрозділів')}`} · службові контакти чергових акаунтів`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
-      sec('Контакти'),
-      { layout: k.lines(true, 5), table: { headerRows: 1, dontBreakRows: true, widths: [60, CW, CW, CW],
-        body: [[{ text: 'Підрозділ', color: C.grey, fontSize: z(7.5) }, ...ROLES.map(r => ({ columnGap: z(5), columns: [k.badge(r.role, z(14)), { width: '*', text: ROLE_STYLE[r.role].name, bold: true, fontSize: z(8.5) }] }))],
-          ...rows.map(d => [{ stack: [{ text: hasText(d.unit) ? d.unit.trim().toUpperCase() : '—', font: THEME.head, bold: true, fontSize: z(12) }, { text: fmtDate(d.date), color: C.grey, fontSize: z(7) }] },
-            ...ROLES.map(r => cell(d, r.role))])] } },
+      { text: 'Чергові та начальники медпунктів', font: THEME.head, bold: true, fontSize: z(17), lineHeight: 1 },
+      { text: `${rows.length === 1 ? 'Зі звіту 1 підрозділу' : `Зі звітів ${rows.length} ${plural(rows.length, 'підрозділу', 'підрозділів', 'підрозділів')}`} · чергові — службові контакти, начальник медпункту — особисті`, color: C.grey, fontSize: z(9), margin: [0, z(6), 0, 0] },
+      { margin: [0, z(14), 0, 0], layout: k.lines(true, 3), table: { headerRows: 1, dontBreakRows: true, widths: [UW, ...COLS.map(() => CW)],
+        body: [[{ text: 'Підрозділ', color: C.grey, fontSize: z(7.5) }, ...ROLES.map(r => headCell(r.role, ROLE_STYLE[r.role].name)), headCell('mp', 'Начальник медпункту')],
+          ...rows.map(d => [{ stack: [{ text: hasText(d.unit) ? d.unit.trim().toUpperCase() : '—', font: THEME.head, bold: true, fontSize: z(12) }, { text: fmtDate(d.date), color: C.grey, fontSize: z(7) },
+            ...(hasText(d.mp_coords) ? [{ text: 'МП ' + d.mp_coords.trim(), color: C.grey, fontSize: z(6), noWrap: true, margin: [0, z(3), 0, 0] }] : [])] },
+            ...COLS.map(who => cell(d, who))])] } },
     ],
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: 'Зведення контактів чергових. Дата біля назви підрозділу — дата актуальності його звіту.' },
+      { text: 'Зведення контактів чергових і начальників медпунктів. Під назвою підрозділу — дата актуальності його звіту й координати медпункту.' },
       { text: total > 1 ? `${cur} / ${total}` : '', alignment: 'right', width: 40 }] }),
   };
 }
@@ -1334,7 +1375,7 @@ function render() {
   const dis = busy ? ' disabled' : '';
   app.innerHTML = `
   <header class="bar"><div class="bar-in">
-    <div class="brand"><h1>Медслужба — плакати зі звітів</h1><p>${esc(TITLE)}</p></div>
+    <div class="brand"><h1>Медслужба — плакати зі звітів</h1><p>${esc(TITLE)} · версія ${esc(BUILD_VERSION)}</p></div>
     <div class="bar-act">
       <label class="btn primary${busy ? ' off' : ''}" tabindex="0" id="openl">Відкрити звіти PDF<input type="file" id="open" accept=".pdf,application/pdf" multiple hidden${dis}></label>
       ${reports.length ? `<button type="button" class="btn" id="clear"${dis}>Прибрати всі</button>` : ''}
@@ -1349,10 +1390,10 @@ function render() {
     ${reports.length ? `
     <div class="tools">
       <button type="button" class="btn primary" id="all"${dis}>Усі плакати одним PDF (${reports.length})</button>
-      <button type="button" class="btn" id="sheet"${dis}>Зведення контактів чергових</button>
+      <button type="button" class="btn" id="sheet"${dis}>Зведення контактів</button>
       <button type="button" class="btn" id="needs"${dis}>Зведення потреб</button>
     </div>
-    <table class="tbl"><thead><tr><th>Підрозділ</th><th>Дата</th><th>Заповнив</th><th>Стан</th><th>Точки</th><th>Потреби</th><th></th></tr></thead>
+    <table class="tbl"><thead><tr><th>Підрозділ</th><th>Дата</th><th>Заповнив</th><th>Стан</th><th>Анкета</th><th>Точки</th><th>Потреби</th><th></th></tr></thead>
     <tbody>${rows.map(rowHtml).join('')}</tbody></table>
     <p class="hint">Плакат — це «Довідка чергового» на один аркуш A4: чергові, точки передачі, позиції для скидів, алгоритм. Змінні дані (забезпечення, потреби, підготовка) дивіться у звіті підрозділу або у «Зведенні потреб»; звіт можна сформувати заново кнопкою «Звіт».</p>
     ` : `<section class="empty">
@@ -1380,6 +1421,11 @@ function stateBadges(r) {
   return out.join('');
 }
 
+// Якою анкетою заповнено звіт: поточною, іншою версією чи старою (без позначки версії)
+const buildBadge = r => !r.build ? '<span class="badge grey" title="У файлі немає позначки версії — заповнено анкетою до листопада 2026">стара анкета</span>'
+  : r.build === BUILD_VERSION ? '<span class="badge ok" title="Та сама версія, що й цей інструмент">актуальна</span>'
+  : `<span class="badge grey" title="Заповнено іншою версією анкети">версія ${esc(r.build)}</span>`;
+
 function rowHtml(r) {
   const d = r.data, dis = busy ? ' disabled' : '';
   const bad = r.needs.filter(n => n.level === 'bad').length;
@@ -1389,6 +1435,7 @@ function rowHtml(r) {
     <td>${esc(fmtDate(d.date) || '—')}</td>
     <td>${esc(d.author || '—')}</td>
     <td><div class="st">${stateBadges(r)}</div></td>
+    <td>${buildBadge(r)}</td>
     <td>${(d.points || []).length}${d.drops === 'Так' ? ` <small>· ${(d.positions || []).length} поз.</small>` : ''}</td>
     <td>${needs.length ? `<span class="${bad ? 'bad' : ''}">${needs.length}</span>` : '—'}</td>
     <td class="act">
@@ -1397,7 +1444,7 @@ function rowHtml(r) {
       <button type="button" class="btn sm" data-details="${r.id}" aria-expanded="${r.open}">Деталі</button>
       <button type="button" class="del" data-del="${r.id}"${dis} aria-label="Прибрати зі списку">✕</button>
     </td>
-  </tr>${r.open ? `<tr class="det"><td colspan="7">${detailsHtml(r)}</td></tr>` : ''}`;
+  </tr>${r.open ? `<tr class="det"><td colspan="8">${detailsHtml(r)}</td></tr>` : ''}`;
 }
 
 function detailsHtml(r) {
@@ -1405,11 +1452,13 @@ function detailsHtml(r) {
   const roles = ROLES.map(x => `<div><b>${esc(x.short)}</b> ${esc(d[`${x.role}_callsign`] || '—')}<br><small>${['phone', 'signal', 'element', 'discord'].map(k => d[`${x.role}_${k}`]).filter(hasText).map(esc).join(' · ') || '—'}</small></div>`).join('');
   const needs = r.needs.length ? `<ul>${r.needs.map(n => `<li class="${n.level}"><span>${esc(n.where)}</span> ${esc(n.what)}</li>`).join('')}</ul>` : '<p class="hint">Потреб не зазначено.</p>';
   const probs = [...r.errors, ...r.warnings];
+  const headC = HEAD_CONTACTS.map(c => d[c.k]).filter(v => hasText(v) && v !== NONE).map(esc).join(' · ');
+  const med = `<div><b>Координати</b> ${esc(d.mp_coords || '—')}</div><div><b>Начальник</b> ${esc(d.mphead_callsign || '—')}<br><small>${headC || '—'}</small></div>`;
   return `<div class="details">
-    <div><h4>Чергові</h4><div class="roles">${roles}</div></div>
+    <div><h4>Чергові</h4><div class="roles">${roles}</div><h4 class="sub">Медпункт</h4><div class="roles">${med}</div></div>
     <div><h4>Потреби та зауваги (${r.needs.length})</h4>${needs}</div>
     ${probs.length ? `<div><h4>Помилки та зауваження (${probs.length})</h4><ul class="probs">${probs.map(p => `<li class="${p.level}">${esc(p.item != null ? `${listDef(listOfPath(p.path)).item} ${p.item + 1} · ` : '')}${esc(p.label)}: ${esc(p.msg)}</li>`).join('')}</ul></div>` : ''}
-    ${r.created ? `<p class="hint">Файл сформовано ${esc(new Date(r.created).toLocaleString('uk-UA'))}${r.v ? `, схема v${r.v}` : ''}.</p>` : ''}
+    ${r.created ? `<p class="hint">Файл сформовано ${esc(new Date(r.created).toLocaleString('uk-UA'))}${r.v ? `, схема v${r.v}` : ''}${r.build ? `, анкета ${esc(r.build)}` : ''}.</p>` : ''}
   </div>`;
 }
 
@@ -1427,7 +1476,7 @@ async function addFiles(files) {
       const p = await readPdfBytes(new Uint8Array(await f.arrayBuffer()));
       const data = normalizeData(p.data);
       const problems = validateData(data);
-      const r = { id: ++seq, file: f.name, data, kind: p.kind, legacy: !!(p.legacy || p.data.migratedFrom === 1), migrated: !!(p.legacy || p.data.migratedFrom), created: p.created, v: p.v,
+      const r = { id: ++seq, file: f.name, data, kind: p.kind, build: p.build, legacy: !!(p.legacy || p.data.migratedFrom === 1), migrated: !!(p.legacy || p.data.migratedFrom), created: p.created, v: p.v,
         errors: errorsOf(problems), warnings: warningsOf(problems), needs: collectNeeds(data), open: false, fit: null };
       const same = reports.find(x => hasText(x.data.unit) && hasText(data.unit) && x.data.unit.toUpperCase() === data.unit.toUpperCase());
       if (same) {
@@ -1497,8 +1546,12 @@ async function allPosters() {
   const unclean = reports.filter(r => !isClean(r));
   let list = sorted();
   if (unclean.length) {
-    const skip = confirm(`${unclean.length} ${plural(unclean.length, 'файл', 'файли', 'файлів')} — чернетки або звіти з помилками (${unclean.map(r => r.data.unit || r.file).join(', ')}). Пропустити їх?\n\nOK — пропустити, Скасувати — друкувати з позначкою-попередженням.`);
-    if (skip) list = list.filter(isClean);
+    const clean = list.filter(isClean).length;
+    const how = await choose('Не всі звіти повні',
+      `${unclean.length} ${plural(unclean.length, 'файл', 'файли', 'файлів')} — чернетки або звіти з помилками: ${unclean.map(r => r.data.unit || r.file).join(', ')}.`,
+      [['clean', `Лише повні звіти (${clean})`, 'primary'], ['all', 'Усі, з позначкою-попередженням'], ['cancel', 'Скасувати']]);
+    if (how === 'cancel') return;
+    if (how === 'clean') list = list.filter(isClean);
     if (!list.length) { toast('Немає повних звітів для друку.'); return; }
   }
   await withBusy('Готую плакати…', async () => {
@@ -1530,7 +1583,7 @@ async function needsSheet() {
 }
 async function report(r) {
   await withBusy(`Формую звіт «${r.data.unit || ''}»…`, async () => {
-    const dd = buildReport(r.data, { kind: r.kind, created: r.created || new Date().toISOString(), version: BUILD_VERSION, regenerated: new Date().toISOString() });
+    const dd = buildReport(r.data, { kind: r.kind, created: r.created || new Date().toISOString(), version: BUILD_VERSION, build: r.build || '', regenerated: new Date().toISOString() });
     saveBlob(await pdfMake.createPdf(dd).getBlob(), nameOf(r.kind === 'draft' ? 'Chernetka' : 'Zvit_med', r.data));
   });
 }
@@ -1554,6 +1607,22 @@ app.addEventListener('keydown', e => { if (e.target.id === 'openl' && (e.key ===
 addEventListener('dragover', e => { e.preventDefault(); $('#drop')?.classList.add('over'); });
 addEventListener('dragleave', e => { if (!e.relatedTarget) $('#drop')?.classList.remove('over'); });
 addEventListener('drop', e => { e.preventDefault(); $('#drop')?.classList.remove('over'); if (!busy) addFiles(e.dataTransfer.files); });
+
+// Діалог із кількома підписаними кнопками; повертає id обраної (Esc або закриття — останній варіант)
+function choose(title, text, options) {
+  return new Promise(res => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'choose';
+    dlg.innerHTML = `<h3>${esc(title)}</h3><p>${esc(text)}</p><div class="choose-b">${options.map(([id, label, cls]) => `<button type="button" class="btn ${cls || ''}" data-choose="${esc(id)}">${esc(label)}</button>`).join('')}</div>`;
+    const fallback = options[options.length - 1][0];
+    let picked = fallback;
+    dlg.addEventListener('click', e => { const b = e.target.closest('[data-choose]'); if (b) { picked = b.dataset.choose; dlg.close(); } });
+    dlg.addEventListener('close', () => { dlg.remove(); res(picked); });
+    document.body.append(dlg);
+    dlg.showModal();
+    dlg.querySelector('.btn.primary, .btn')?.focus();
+  });
+}
 
 let toastTimer = null;
 function toast(msg, ms = 5000) {

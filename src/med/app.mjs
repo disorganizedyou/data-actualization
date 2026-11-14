@@ -1,6 +1,6 @@
 // Інструмент медслужби: відкриває звіти підрозділів (PDF), показує їх стан і друкує плакати.
 
-import { TITLE, ROLES, listDef, listOfPath } from './schema.mjs';
+import { TITLE, ROLES, HEAD_CONTACTS, NONE, listDef, listOfPath } from './schema.mjs';
 import { hasText, esc, fmtDate, safeFileName, plural } from './text.mjs';
 import { validateData, normalizeData, errorsOf, warningsOf, isNewFieldError } from './validate.mjs';
 import { readPdfBytes } from './codec.mjs';
@@ -32,7 +32,7 @@ function render() {
   const dis = busy ? ' disabled' : '';
   app.innerHTML = `
   <header class="bar"><div class="bar-in">
-    <div class="brand"><h1>Медслужба — плакати зі звітів</h1><p>${esc(TITLE)}</p></div>
+    <div class="brand"><h1>Медслужба — плакати зі звітів</h1><p>${esc(TITLE)} · версія ${esc(BUILD_VERSION)}</p></div>
     <div class="bar-act">
       <label class="btn primary${busy ? ' off' : ''}" tabindex="0" id="openl">Відкрити звіти PDF<input type="file" id="open" accept=".pdf,application/pdf" multiple hidden${dis}></label>
       ${reports.length ? `<button type="button" class="btn" id="clear"${dis}>Прибрати всі</button>` : ''}
@@ -47,10 +47,10 @@ function render() {
     ${reports.length ? `
     <div class="tools">
       <button type="button" class="btn primary" id="all"${dis}>Усі плакати одним PDF (${reports.length})</button>
-      <button type="button" class="btn" id="sheet"${dis}>Зведення контактів чергових</button>
+      <button type="button" class="btn" id="sheet"${dis}>Зведення контактів</button>
       <button type="button" class="btn" id="needs"${dis}>Зведення потреб</button>
     </div>
-    <table class="tbl"><thead><tr><th>Підрозділ</th><th>Дата</th><th>Заповнив</th><th>Стан</th><th>Точки</th><th>Потреби</th><th></th></tr></thead>
+    <table class="tbl"><thead><tr><th>Підрозділ</th><th>Дата</th><th>Заповнив</th><th>Стан</th><th>Анкета</th><th>Точки</th><th>Потреби</th><th></th></tr></thead>
     <tbody>${rows.map(rowHtml).join('')}</tbody></table>
     <p class="hint">Плакат — це «Довідка чергового» на один аркуш A4: чергові, точки передачі, позиції для скидів, алгоритм. Змінні дані (забезпечення, потреби, підготовка) дивіться у звіті підрозділу або у «Зведенні потреб»; звіт можна сформувати заново кнопкою «Звіт».</p>
     ` : `<section class="empty">
@@ -78,6 +78,11 @@ function stateBadges(r) {
   return out.join('');
 }
 
+// Якою анкетою заповнено звіт: поточною, іншою версією чи старою (без позначки версії)
+const buildBadge = r => !r.build ? '<span class="badge grey" title="У файлі немає позначки версії — заповнено анкетою до листопада 2026">стара анкета</span>'
+  : r.build === BUILD_VERSION ? '<span class="badge ok" title="Та сама версія, що й цей інструмент">актуальна</span>'
+  : `<span class="badge grey" title="Заповнено іншою версією анкети">версія ${esc(r.build)}</span>`;
+
 function rowHtml(r) {
   const d = r.data, dis = busy ? ' disabled' : '';
   const bad = r.needs.filter(n => n.level === 'bad').length;
@@ -87,6 +92,7 @@ function rowHtml(r) {
     <td>${esc(fmtDate(d.date) || '—')}</td>
     <td>${esc(d.author || '—')}</td>
     <td><div class="st">${stateBadges(r)}</div></td>
+    <td>${buildBadge(r)}</td>
     <td>${(d.points || []).length}${d.drops === 'Так' ? ` <small>· ${(d.positions || []).length} поз.</small>` : ''}</td>
     <td>${needs.length ? `<span class="${bad ? 'bad' : ''}">${needs.length}</span>` : '—'}</td>
     <td class="act">
@@ -95,7 +101,7 @@ function rowHtml(r) {
       <button type="button" class="btn sm" data-details="${r.id}" aria-expanded="${r.open}">Деталі</button>
       <button type="button" class="del" data-del="${r.id}"${dis} aria-label="Прибрати зі списку">✕</button>
     </td>
-  </tr>${r.open ? `<tr class="det"><td colspan="7">${detailsHtml(r)}</td></tr>` : ''}`;
+  </tr>${r.open ? `<tr class="det"><td colspan="8">${detailsHtml(r)}</td></tr>` : ''}`;
 }
 
 function detailsHtml(r) {
@@ -103,11 +109,13 @@ function detailsHtml(r) {
   const roles = ROLES.map(x => `<div><b>${esc(x.short)}</b> ${esc(d[`${x.role}_callsign`] || '—')}<br><small>${['phone', 'signal', 'element', 'discord'].map(k => d[`${x.role}_${k}`]).filter(hasText).map(esc).join(' · ') || '—'}</small></div>`).join('');
   const needs = r.needs.length ? `<ul>${r.needs.map(n => `<li class="${n.level}"><span>${esc(n.where)}</span> ${esc(n.what)}</li>`).join('')}</ul>` : '<p class="hint">Потреб не зазначено.</p>';
   const probs = [...r.errors, ...r.warnings];
+  const headC = HEAD_CONTACTS.map(c => d[c.k]).filter(v => hasText(v) && v !== NONE).map(esc).join(' · ');
+  const med = `<div><b>Координати</b> ${esc(d.mp_coords || '—')}</div><div><b>Начальник</b> ${esc(d.mphead_callsign || '—')}<br><small>${headC || '—'}</small></div>`;
   return `<div class="details">
-    <div><h4>Чергові</h4><div class="roles">${roles}</div></div>
+    <div><h4>Чергові</h4><div class="roles">${roles}</div><h4 class="sub">Медпункт</h4><div class="roles">${med}</div></div>
     <div><h4>Потреби та зауваги (${r.needs.length})</h4>${needs}</div>
     ${probs.length ? `<div><h4>Помилки та зауваження (${probs.length})</h4><ul class="probs">${probs.map(p => `<li class="${p.level}">${esc(p.item != null ? `${listDef(listOfPath(p.path)).item} ${p.item + 1} · ` : '')}${esc(p.label)}: ${esc(p.msg)}</li>`).join('')}</ul></div>` : ''}
-    ${r.created ? `<p class="hint">Файл сформовано ${esc(new Date(r.created).toLocaleString('uk-UA'))}${r.v ? `, схема v${r.v}` : ''}.</p>` : ''}
+    ${r.created ? `<p class="hint">Файл сформовано ${esc(new Date(r.created).toLocaleString('uk-UA'))}${r.v ? `, схема v${r.v}` : ''}${r.build ? `, анкета ${esc(r.build)}` : ''}.</p>` : ''}
   </div>`;
 }
 
@@ -125,7 +133,7 @@ async function addFiles(files) {
       const p = await readPdfBytes(new Uint8Array(await f.arrayBuffer()));
       const data = normalizeData(p.data);
       const problems = validateData(data);
-      const r = { id: ++seq, file: f.name, data, kind: p.kind, legacy: !!(p.legacy || p.data.migratedFrom === 1), migrated: !!(p.legacy || p.data.migratedFrom), created: p.created, v: p.v,
+      const r = { id: ++seq, file: f.name, data, kind: p.kind, build: p.build, legacy: !!(p.legacy || p.data.migratedFrom === 1), migrated: !!(p.legacy || p.data.migratedFrom), created: p.created, v: p.v,
         errors: errorsOf(problems), warnings: warningsOf(problems), needs: collectNeeds(data), open: false, fit: null };
       const same = reports.find(x => hasText(x.data.unit) && hasText(data.unit) && x.data.unit.toUpperCase() === data.unit.toUpperCase());
       if (same) {
@@ -195,8 +203,12 @@ async function allPosters() {
   const unclean = reports.filter(r => !isClean(r));
   let list = sorted();
   if (unclean.length) {
-    const skip = confirm(`${unclean.length} ${plural(unclean.length, 'файл', 'файли', 'файлів')} — чернетки або звіти з помилками (${unclean.map(r => r.data.unit || r.file).join(', ')}). Пропустити їх?\n\nOK — пропустити, Скасувати — друкувати з позначкою-попередженням.`);
-    if (skip) list = list.filter(isClean);
+    const clean = list.filter(isClean).length;
+    const how = await choose('Не всі звіти повні',
+      `${unclean.length} ${plural(unclean.length, 'файл', 'файли', 'файлів')} — чернетки або звіти з помилками: ${unclean.map(r => r.data.unit || r.file).join(', ')}.`,
+      [['clean', `Лише повні звіти (${clean})`, 'primary'], ['all', 'Усі, з позначкою-попередженням'], ['cancel', 'Скасувати']]);
+    if (how === 'cancel') return;
+    if (how === 'clean') list = list.filter(isClean);
     if (!list.length) { toast('Немає повних звітів для друку.'); return; }
   }
   await withBusy('Готую плакати…', async () => {
@@ -228,7 +240,7 @@ async function needsSheet() {
 }
 async function report(r) {
   await withBusy(`Формую звіт «${r.data.unit || ''}»…`, async () => {
-    const dd = buildReport(r.data, { kind: r.kind, created: r.created || new Date().toISOString(), version: BUILD_VERSION, regenerated: new Date().toISOString() });
+    const dd = buildReport(r.data, { kind: r.kind, created: r.created || new Date().toISOString(), version: BUILD_VERSION, build: r.build || '', regenerated: new Date().toISOString() });
     saveBlob(await pdfMake.createPdf(dd).getBlob(), nameOf(r.kind === 'draft' ? 'Chernetka' : 'Zvit_med', r.data));
   });
 }
@@ -252,6 +264,22 @@ app.addEventListener('keydown', e => { if (e.target.id === 'openl' && (e.key ===
 addEventListener('dragover', e => { e.preventDefault(); $('#drop')?.classList.add('over'); });
 addEventListener('dragleave', e => { if (!e.relatedTarget) $('#drop')?.classList.remove('over'); });
 addEventListener('drop', e => { e.preventDefault(); $('#drop')?.classList.remove('over'); if (!busy) addFiles(e.dataTransfer.files); });
+
+// Діалог із кількома підписаними кнопками; повертає id обраної (Esc або закриття — останній варіант)
+function choose(title, text, options) {
+  return new Promise(res => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'choose';
+    dlg.innerHTML = `<h3>${esc(title)}</h3><p>${esc(text)}</p><div class="choose-b">${options.map(([id, label, cls]) => `<button type="button" class="btn ${cls || ''}" data-choose="${esc(id)}">${esc(label)}</button>`).join('')}</div>`;
+    const fallback = options[options.length - 1][0];
+    let picked = fallback;
+    dlg.addEventListener('click', e => { const b = e.target.closest('[data-choose]'); if (b) { picked = b.dataset.choose; dlg.close(); } });
+    dlg.addEventListener('close', () => { dlg.remove(); res(picked); });
+    document.body.append(dlg);
+    dlg.showModal();
+    dlg.querySelector('.btn.primary, .btn')?.focus();
+  });
+}
 
 let toastTimer = null;
 function toast(msg, ms = 5000) {

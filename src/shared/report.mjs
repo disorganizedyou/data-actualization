@@ -1,6 +1,6 @@
 // Повний звіт (PDF) — те, що підрозділ надсилає медслужбі.
 
-import { ROLES, CONTACT, TITLE, FORM_NAME, unitName, LEVELS, POINT_GROUPS, POSITION_FIELDS, HEAD_CONTACTS, sectionById, visible, required, dropsDone, noDrops, NONE } from './schema.mjs';
+import { ROLES, CONTACT, TITLE, FORM_NAME, ELEMENT_SERVER, unitName, LEVELS, POINT_GROUPS, POSITION_FIELDS, HEAD_CONTACTS, sectionById, visible, required, dropsDone, noDrops, NONE } from './schema.mjs';
 import { hasText, fmtDate, people, plural } from './text.mjs';
 import { kit, C, THEME, PAGE, ROLE_STYLE, L, T, keepHeadings, starWidth } from './pdfkit.mjs';
 import { pdfEmbedding, makePayload } from './codec.mjs';
@@ -46,8 +46,10 @@ export function collectNeeds(d) {
   return out;
 }
 
-// d — нормалізовані дані; opts.kind 'report' | 'draft'; opts.created — ISO-рядок часу формування; opts.version — версія збірки
-export function buildReport(d, { kind = 'report', created = '', version = '', regenerated = '' } = {}) {
+// d — нормалізовані дані; opts.kind 'report' | 'draft'; opts.created — ISO-рядок часу формування;
+// opts.version — версія збірки, що формує PDF; opts.build — версія анкети, якою заповнено дані (за замовчуванням = version;
+// медслужба при повторному формуванні передає початкову)
+export function buildReport(d, { kind = 'report', created = '', version = '', build = version, regenerated = '' } = {}) {
   const k = kit(1), { z, val, lab, sec, pill } = k;
   const pts = sectionById('points'), pos = sectionById('drops'), algo = sectionById('algo'), mp = sectionById('mphelp');
   const LW = +(PAGE.cw * .3).toFixed(1);
@@ -133,6 +135,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '', re
     sec('Контакти чергових'),
     { text: 'Службові контакти чергових акаунтів, а не особисті контакти військовослужбовців.', color: C.grey, margin: [0, 0, 0, z(6)] },
     contacts,
+    { text: `Element — сервер ${ELEMENT_SERVER}`, color: C.grey, fontSize: z(7.5), margin: [0, z(4), 0, 0] },
     sec('Медичний пункт'), medpoint,
     sec('Зведення по точках передачі'),
     summary || { text: 'Точок не вказано', color: C.grey },
@@ -144,7 +147,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '', re
     sec(T(mp)), kv(mp.fields, d),
     sec('Потреби та зауваги'), needsBlock,
   ];
-  const payload = makePayload(d, { kind, created }), emb = pdfEmbedding(payload);
+  const payload = makePayload(d, { kind, created, build }), emb = pdfEmbedding(payload);
   const tag = [draft ? 'Чернетка' : 'Повний звіт', unit, fmtDate(d.date)].filter(hasText).join('  ·  ');
   return {
     pageSize: 'A4', pageMargins: [PAGE.m, 40, PAGE.m, 44], content, pageBreakBefore: keepHeadings,
@@ -155,7 +158,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '', re
     ...(draft ? { background: () => ({ text: 'ЧЕРНЕТКА', color: '#f3d3d5', bold: true, fontSize: 78, font: THEME.head, alignment: 'center', margin: [0, 360, 0, 0] }) } : {}),
     header: cur => cur > 1 ? { margin: [PAGE.m, 18, PAGE.m, 0], fontSize: 7, color: C.grey, text: tag } : null,
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${version ? ` Форма ${version}.` : ''}` },
+      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${build ? ` Анкета ${build}.` : ''}` },
       { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }),
   };
 }

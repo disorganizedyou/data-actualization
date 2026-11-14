@@ -1,6 +1,6 @@
 {
   "name": "med-data-actualization",
-  "version": "2.0.0",
+  "version": "2026.11.1",
   "private": true,
   "description": "Анкета актуалізації даних для медичної служби: самодостатні HTML-файли без залежностей",
   "type": "module",

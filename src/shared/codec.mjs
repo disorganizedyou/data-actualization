@@ -36,8 +36,10 @@ export function crc32(bytes) {
 
 // ---- Конверт ----
 // kind: 'report' — повний перевірений звіт; 'draft' — чернетка (може містити помилки)
-export function makePayload(data, { kind = 'report', created } = {}) {
-  return { app: 'med-data-actualization', v: SCHEMA_VERSION, kind, created, data: normalizeData(data) };
+// build — версія збірки анкети, якою заповнено дані (щоб медслужба бачила застарілі анкети)
+const BUILD_RE = /^[\w.\-+]{1,40}$/;
+export function makePayload(data, { kind = 'report', created, build } = {}) {
+  return { app: 'med-data-actualization', v: SCHEMA_VERSION, kind, created, ...(BUILD_RE.test(build || '') ? { build } : {}), data: normalizeData(data) };
 }
 export function encodePayload(payload) {
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
@@ -51,7 +53,8 @@ export function parsePayload(text) {
   if (p.app !== 'med-data-actualization') return { v: 1, kind: 'report', data: migrate(p, 1), legacy: true };
   if (typeof p.v !== 'number' || p.v > SCHEMA_VERSION) throw new Error('Файл створено новішою версією форми — оновіть форму');
   if (!p.data || typeof p.data !== 'object' || Array.isArray(p.data)) throw new Error('Пошкоджені дані у файлі');
-  return { v: p.v, kind: p.kind === 'draft' ? 'draft' : 'report', created: typeof p.created === 'string' ? p.created : undefined, data: migrate(p.data, p.v) };
+  return { v: p.v, kind: p.kind === 'draft' ? 'draft' : 'report', created: typeof p.created === 'string' ? p.created : undefined,
+    build: typeof p.build === 'string' && BUILD_RE.test(p.build) ? p.build : undefined, data: migrate(p.data, p.v) };
 }
 
 // Міграція даних зі старіших версій схеми.
