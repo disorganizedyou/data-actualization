@@ -88,7 +88,7 @@ function stateBadges(r) {
   if (r.warnings.length) out.push(`<span class="badge grey">${r.warnings.length} зауваж.</span>`);
   const gaps = nrkGaps(r);
   if (gaps) out.push(`<span class="badge warn" title="Точки з НРК без моделі чи без відповіді про переобладнання — доповніть через «Редагувати»">НРК: доповнити ${gaps}</span>`);
-  if (r.dirty) out.push('<span class="badge warn" title="Зміни є лише тут — завантажте оновлений звіт">змінено, не збережено</span>');
+  if (r.dirty) out.push('<span class="badge warn" title="Зміни внесено тут і вже є на плакаті, але ще не у файлі — завантажте оновлений звіт">зміни не в файлі</span>');
   else if (r.amended) out.push(`<span class="badge grey" title="Дані змінено медслужбою ${esc(fmtDate(r.amended.slice(0, 10)))}">змінено медслужбою</span>`);
   return out.join('');
 }
@@ -96,7 +96,7 @@ function stateBadges(r) {
 // Якою анкетою заповнено звіт: поточною, іншою версією чи старою (без позначки версії)
 const buildBadge = r => !r.build ? '<span class="badge grey" title="У файлі немає позначки версії — заповнено анкетою до листопада 2026">стара анкета</span>'
   : r.build === BUILD_VERSION ? '<span class="badge ok" title="Та сама версія, що й цей інструмент">актуальна</span>'
-  : `<span class="badge grey" title="Заповнено іншою версією анкети">версія ${esc(r.build)}</span>`;
+  : `<span class="badge grey" title="Заповнено іншою версією анкети: ${esc(r.build)}">${esc(r.build.split('-')[0])}</span>`;
 
 function rowHtml(r) {
   const d = r.data, dis = busy ? ' disabled' : '';
@@ -113,7 +113,7 @@ function rowHtml(r) {
     <td class="act">
       <button type="button" class="btn sm primary" data-poster="${r.id}"${dis}>Плакат</button>
       <button type="button" class="btn sm" data-edit="${r.id}"${dis} title="Відкрити звіт в анкеті й змінити будь-які дані">Редагувати</button>
-      <button type="button" class="btn sm" data-report="${r.id}"${dis} title="Сформувати повний звіт заново з даних цього файла (з доповненнями)">Звіт</button>
+      <button type="button" class="btn sm" data-report="${r.id}"${dis} title="Сформувати повний звіт заново з даних цього файла (зі змінами медслужби)">Звіт</button>
       <button type="button" class="btn sm" data-details="${r.id}" aria-expanded="${r.open}">Деталі</button>
       <button type="button" class="del" data-del="${r.id}"${dis} aria-label="Прибрати зі списку">✕</button>
     </td>
@@ -290,6 +290,7 @@ async function updatedReports() {
 let editing = null;          // { r, form } — звіт, що зараз редагується
 function openEditor(r) {
   const host = $('#editor');
+  $('#toast').hidden = true;      // сповіщення списку («Відкрито N звітів») до анкети не стосується
   if (!host.shadowRoot) host.attachShadow({ mode: 'open' }).innerHTML = `<style>${FORM_CSS}</style><div class="form-root"></div>`;
   app.hidden = true; host.hidden = false;
   editing = { r, form: createForm(host.shadowRoot.querySelector('.form-root'), {

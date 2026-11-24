@@ -1,3 +1,3 @@
-# Версія 2026.11.1-2b08e4c
-4d9655068ab3235e9977d002ddacfc99d3721806ee7c3f3a71cf2fc6bd648e42  anketa.html
-af028e4cec0ba4b513a1c517dbdd1568812f0c23eecbfb939e5beeda999dee95  medsluzhba.html
+# Версія 2026.11.1-6cf9e3d
+8f628b5ad55c02d56706b092ad4bb7325f105382eae5f372d2ca3d3667c758cb  anketa.html
+46be3cbf620cff85ccaaa85b05f989b49e727edbac67a793f8e5b629b93f2588  medsluzhba.html

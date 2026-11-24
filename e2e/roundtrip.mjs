@@ -244,7 +244,7 @@ await mpage.click('#editor [data-step="6"]');
 assert.match(await mpage.textContent('#editor .rv-head'), /змінено 3 відповіді/, 'огляд показує зміни відносно звіту');
 await mpage.click('#editor .dl [data-med="save"]');
 await mpage.waitForSelector('#editor', { state: 'hidden' });
-assert.match(await mpage.textContent(`${row2} .st`), /змінено, не збережено/);
+assert.match(await mpage.textContent(`${row2} .st`), /зміни не в файлі/);
 await mpage.click(`${row2} [data-details]`);
 assert.match(await mpage.textContent('.details'), /Беркут-2/);
 assert.match(await mpage.textContent('.details'), /Рись-М \(2 шт\.\)/);
@@ -264,6 +264,27 @@ await mpage.click('#clear');
 await mpage.setInputFiles('#open', [report.path, resolve(OUT, upd.name)]);
 await mpage.waitForSelector('.tbl');
 assert.match(await mpage.textContent(`${row2} .st`), /змінено медслужбою/, 'з двох звітів однієї дати — змінений медслужбою');
+
+console.log('▶ безпека: шкідливі рядки в даних не виконуються й не вставляються');
+const XSS = '<img src=x onerror="document.title=\'PWNED\'"><script>document.title="PWNED"</script>';
+const injected = pg => pg.evaluate(() => {
+  const roots = r => [r, ...[...r.querySelectorAll('*')].filter(e => e.shadowRoot).flatMap(e => roots(e.shadowRoot))];
+  return { title: document.title, imgs: roots(document).reduce((n, r) => n + r.querySelectorAll('img[src="x"]').length, 0),
+    wide: document.documentElement.scrollWidth > innerWidth + 1 };
+});
+await mpage.click(`${row2} [data-edit]`);
+await mpage.click('#editor [data-step="4"]');
+for (const k of ['name', 'contact', 'nrk_model']) { await mpage.fill(`[data-path="points.0.${k}"]`, XSS + ' ' + 'дуже-довге-слово-без-пробілів'.repeat(8)); await mpage.dispatchEvent(`[data-path="points.0.${k}"]`, 'change'); }
+await mpage.click('#editor [data-step="6"]'); await mpage.click('#editor details.review summary');
+let inj = await injected(mpage);
+assert.equal(inj.imgs, 0, 'редактор: шкідливий рядок не став елементом'); assert.notEqual(inj.title, 'PWNED'); assert.ok(!inj.wide, 'редактор: довге слово не розпирає сторінку');
+await mpage.click('#editor .dl [data-med="save"]');
+await mpage.waitForSelector('#editor', { state: 'hidden' });
+await mpage.click(`${row2} [data-details]`);
+inj = await injected(mpage);
+assert.equal(inj.imgs, 0, 'список і деталі: шкідливий рядок не став елементом'); assert.notEqual(inj.title, 'PWNED'); assert.ok(!inj.wide, 'деталі: довге слово не розпирає сторінку');
+const xssPoster = await mdl(`${row2} [data-poster]`, 'xss_');
+assert.ok(pageCount(xssPoster.bytes) >= 1, 'плакат зі шкідливими рядками формується');
 
 console.log('▶ анкета на екрані комп’ютера: клавіатура, «Далі», історія, дублювання, огляд змін');
 const dctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, locale: 'uk-UA' });

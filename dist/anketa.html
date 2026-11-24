@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-lMcsNDQgi66tZREo2qYPl6d5gipYgcHKYbjQqplc93E='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-90sQUrSfVhPXL/NcuEOZk2rk8pqv1hMWoZdUE6ptql0='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -248,7 +248,9 @@ fieldset.group legend { padding: 0; margin-bottom: 6px; }
 .rv-step { padding: 12px 0; border-top: 1px solid var(--line-2); display: grid; gap: 8px; }
 .rv-step h4 { font: 600 15px/1.3 var(--head); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .rv-step h5 { font: 600 13px/1.3 var(--font); color: var(--accent); margin-top: 6px; display: flex; gap: 8px; align-items: center; }
-.rv { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rv { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+.review { overflow-wrap: anywhere; min-width: 0; }
+.check > * { min-width: 0; }
 .rv th { width: 38%; text-align: left; font-weight: 400; color: var(--mute); padding: 4px 12px 4px 0; vertical-align: top; }
 .rv td { padding: 4px 0; font-weight: 600; white-space: pre-line; overflow-wrap: anywhere; }
 .rv tr + tr :is(th, td) { border-top: 1px solid var(--line-2); }
@@ -302,7 +304,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "2026.11.1-2b08e4c";
+const BUILD_VERSION = "2026.11.1-6cf9e3d";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
