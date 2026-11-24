@@ -1,6 +1,7 @@
 // Інструмент медслужби: відкриває звіти підрозділів (PDF), показує їх стан і друкує плакати.
 
-import { TITLE, ROLES, HEAD_CONTACTS, NONE, POINT_GROUPS, listDef, listOfPath, visible } from './schema.mjs';
+import { TITLE, ROLES, HEAD_CONTACTS, NONE, listDef, listOfPath } from './schema.mjs';
+import { createForm } from '../form/app.mjs';
 import { hasText, esc, fmtDate, safeFileName, plural } from './text.mjs';
 import { validateData, normalizeData, errorsOf, warningsOf, isNewFieldError } from './validate.mjs';
 import { readPdfBytes } from './codec.mjs';
@@ -23,9 +24,6 @@ const byUnit = (a, b) => (a.data.unit || '').localeCompare(b.data.unit || '', 'u
 const sorted = () => [...reports].sort(byUnit);
 const kindName = (r, acc = false) => r.kind === 'draft' ? (acc ? 'чернетку' : 'чернетка') : (acc ? 'звіт' : 'звіт');
 
-// Поля НРК точки (зі схеми) — їх медслужба може доповнити даними, переданими окремо
-const NRK_FIELDS = POINT_GROUPS.find(g => g.id === 'nrk').fields;
-const NRK_KEYS = NRK_FIELDS.map(f => f.k);
 // Скільки точок з НРК ще без моделі чи без відповіді про переобладнання
 const nrkGaps = r => (r.data.points || []).filter(p => p.nrk === 'Є' && (!hasText(p.nrk_model) || !hasText(p.nrk_mod) || (p.nrk_mod === 'Так' && !hasText(p.nrk_mod_note)))).length;
 // Перерахувати стан звіту після зміни даних
@@ -60,11 +58,11 @@ function render() {
       <button type="button" class="btn primary" id="all"${dis}>Усі плакати одним PDF (${reports.length})</button>
       <button type="button" class="btn" id="sheet"${dis}>Зведення контактів</button>
       <button type="button" class="btn" id="needs"${dis}>Зведення потреб</button>
-      ${reports.some(r => r.dirty) ? `<button type="button" class="btn warnb" id="updated"${dis} title="Звіти, доповнені тут, — щоб зберегти зміни й повернути підрозділам">Завантажити оновлені звіти (${reports.filter(r => r.dirty).length})</button>` : ''}
+      ${reports.some(r => r.dirty) ? `<button type="button" class="btn warnb" id="updated"${dis} title="Звіти, змінені тут, — щоб зберегти зміни й повернути підрозділам">Завантажити оновлені звіти (${reports.filter(r => r.dirty).length})</button>` : ''}
     </div>
     <table class="tbl"><thead><tr><th>Підрозділ</th><th>Дата</th><th>Заповнив</th><th>Стан</th><th>Анкета</th><th>Точки</th><th>Потреби</th><th></th></tr></thead>
     <tbody>${rows.map(rowHtml).join('')}</tbody></table>
-    <p class="hint">Дані НРК (модель, переобладнання), передані окремо, вносьте кнопкою «НРК» біля підрозділу. Після цього завантажте оновлений звіт — зміни зберігаються лише в ньому.</p>
+    <p class="hint">Нову інформацію (наприклад, модель НРК чи інший позивний чергового) вносьте кнопкою «Редагувати» біля підрозділу: відкриється анкета з даними звіту. Після збереження плакат уже з новими даними; щоб зберегти зміни у файлі — завантажте оновлений звіт.</p>
     <p class="hint">Плакат — це «Довідка чергового» на один аркуш A4: чергові, точки передачі, позиції для скидів, алгоритм. Змінні дані (забезпечення, потреби, підготовка) дивіться у звіті підрозділу або у «Зведенні потреб»; звіт можна сформувати заново кнопкою «Звіт».</p>
     ` : `<section class="empty">
       <h2>Як це працює</h2>
@@ -89,9 +87,9 @@ function stateBadges(r) {
   if (!r.errors.length && r.kind === 'report') out.push('<span class="badge ok">✓ повний</span>');
   if (r.warnings.length) out.push(`<span class="badge grey">${r.warnings.length} зауваж.</span>`);
   const gaps = nrkGaps(r);
-  if (gaps) out.push(`<span class="badge warn" title="Точки з НРК без моделі чи без відповіді про переобладнання — доповніть кнопкою «НРК»">НРК: доповнити ${gaps}</span>`);
+  if (gaps) out.push(`<span class="badge warn" title="Точки з НРК без моделі чи без відповіді про переобладнання — доповніть через «Редагувати»">НРК: доповнити ${gaps}</span>`);
   if (r.dirty) out.push('<span class="badge warn" title="Зміни є лише тут — завантажте оновлений звіт">змінено, не збережено</span>');
-  else if (r.amended) out.push(`<span class="badge grey" title="Дані НРК доповнено медслужбою ${esc(fmtDate(r.amended.slice(0, 10)))}">НРК доповнено</span>`);
+  else if (r.amended) out.push(`<span class="badge grey" title="Дані змінено медслужбою ${esc(fmtDate(r.amended.slice(0, 10)))}">змінено медслужбою</span>`);
   return out.join('');
 }
 
@@ -114,7 +112,7 @@ function rowHtml(r) {
     <td>${needs.length ? `<span class="${bad ? 'bad' : ''}">${needs.length}</span>` : '—'}</td>
     <td class="act">
       <button type="button" class="btn sm primary" data-poster="${r.id}"${dis}>Плакат</button>
-      <button type="button" class="btn sm" data-nrk="${r.id}"${dis} title="Доповнити дані НРК: модель, переобладнання">НРК</button>
+      <button type="button" class="btn sm" data-edit="${r.id}"${dis} title="Відкрити звіт в анкеті й змінити будь-які дані">Редагувати</button>
       <button type="button" class="btn sm" data-report="${r.id}"${dis} title="Сформувати повний звіт заново з даних цього файла (з доповненнями)">Звіт</button>
       <button type="button" class="btn sm" data-details="${r.id}" aria-expanded="${r.open}">Деталі</button>
       <button type="button" class="del" data-del="${r.id}"${dis} aria-label="Прибрати зі списку">✕</button>
@@ -287,67 +285,26 @@ async function updatedReports() {
   toast(`Завантажено ${list.length} ${plural(list.length, 'оновлений звіт', 'оновлені звіти', 'оновлених звітів')}. Збережіть їх і, за потреби, поверніть підрозділам.`, 8000);
 }
 
-// ---------- доповнення даних НРК ----------
-function nrkFieldHtml(f, i, it) {
-  const id = `nrk_${i}_${f.k}`, v = it[f.k] ?? '', hid = visible(f, it) ? '' : ' hidden';
-  const hint = f.hint ? `<small class="eh">${esc(f.hint)}</small>` : '';
-  let ctl;
-  if (f.t === 'seg') ctl = `<div class="rad" role="radiogroup" aria-labelledby="${id}_l">${f.o.map(o => `<label><input type="radio" name="${id}" value="${esc(o)}" data-i="${i}" data-k="${f.k}"${v === o ? ' checked' : ''}> ${esc(o)}</label>`).join('')}</div>`;
-  else if (f.t === 'area') ctl = `<textarea id="${id}" rows="2" data-i="${i}" data-k="${f.k}" placeholder="${esc(f.ph || '')}">${esc(v)}</textarea>`;
-  else ctl = `<input id="${id}" type="text" data-i="${i}" data-k="${f.k}" value="${esc(v)}" placeholder="${esc(f.ph || '')}">`;
-  const lab = f.t === 'seg' ? `<span class="el" id="${id}_l">${esc(f.l)}</span>` : `<label class="el" for="${id}">${esc(f.l)}</label>`;
-  return `<div class="ef${f.t === 'area' || f.k === 'nrk_note' ? ' wide' : ''}" data-i="${i}" data-f="${f.k}"${hid}>${lab}${hint}${ctl}<p class="err"></p></div>`;
+// ---------- редагування звіту: та сама анкета, у режимі медслужби ----------
+// Анкета монтується в shadow DOM (#editor), щоб її стилі не змішувалися зі стилями цього інструмента.
+let editing = null;          // { r, form } — звіт, що зараз редагується
+function openEditor(r) {
+  const host = $('#editor');
+  if (!host.shadowRoot) host.attachShadow({ mode: 'open' }).innerHTML = `<style>${FORM_CSS}</style><div class="form-root"></div>`;
+  app.hidden = true; host.hidden = false;
+  editing = { r, form: createForm(host.shadowRoot.querySelector('.form-root'), {
+    mode: 'med', data: r.data, cssHost: host, onSave: d => closeEditor(d), onCancel: () => closeEditor(null) }) };
 }
-function editNrk(r) {
-  const work = (r.data.points || []).map(p => ({ ...p }));
-  const before = JSON.stringify(work.map(p => NRK_KEYS.map(k => p[k] ?? '')));
-  const dlg = document.createElement('dialog');
-  dlg.className = 'edit';
-  dlg.innerHTML = `<form method="dialog">
-    <header><h3>Дані НРК — ${esc(hasText(r.data.unit) ? r.data.unit.toUpperCase() : r.file)}</h3>
-      <p>Внесіть дані, які підрозділ передав окремо. Зміни потрапляють у плакат одразу, а щоб їх зберегти — завантажте оновлений звіт.</p></header>
-    <div class="ed-body">${work.map((p, i) => `<section class="ept"><h4>Точка ${i + 1}${hasText(p.name) ? ` · ${esc(p.name)}` : ''}${hasText(p.coords) ? ` <small>${esc(p.coords)}</small>` : ''}</h4>
-      <div class="egrid">${NRK_FIELDS.map(f => nrkFieldHtml(f, i, p)).join('')}</div></section>`).join('')}</div>
-    <footer><p class="enote" hidden></p><button type="button" class="btn" value="cancel" data-act="cancel">Скасувати</button>
-      <button type="button" class="btn primary" data-act="save">Зберегти</button></footer></form>`;
-  let armed = false;
-  const setVal = el => {
-    const it = work[+el.dataset.i], v = el.value.trim();
-    if (v) it[el.dataset.k] = v; else delete it[el.dataset.k];
-    // показати/сховати залежні поля цієї точки
-    dlg.querySelectorAll(`.ef[data-i="${el.dataset.i}"]`).forEach(box => { box.hidden = !visible(NRK_FIELDS.find(f => f.k === box.dataset.f), it); });
-    armed = false; dlg.querySelector('[data-act="save"]').textContent = 'Зберегти'; dlg.querySelector('.enote').hidden = true;
-  };
-  dlg.addEventListener('input', e => { if (e.target.dataset.k) setVal(e.target); });
-  dlg.addEventListener('change', e => { if (e.target.dataset.k) setVal(e.target); });
-  dlg.addEventListener('click', e => {
-    const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'cancel') dlg.close();
-    if (act !== 'save') return;
-    const next = normalizeData({ ...r.data, points: work });
-    // пропуски й помилки саме в полях НРК — показуємо біля полів; друге натискання зберігає попри них
-    const errs = errorsOf(validateData(next)).filter(p => /^points\.\d+\.nrk/.test(p.path));
-    dlg.querySelectorAll('.ef .err').forEach(el => { el.textContent = ''; });
-    for (const p of errs) { const [, i, k] = p.path.split('.'); const box = dlg.querySelector(`.ef[data-i="${i}"][data-f="${k}"] .err`); if (box) box.textContent = p.msg; }
-    if (errs.length && !armed) {
-      armed = true;
-      const note = dlg.querySelector('.enote'); note.hidden = false;
-      note.textContent = `Не заповнено або неправильно: ${errs.length}. Доповніть або натисніть ще раз, щоб зберегти як є.`;
-      e.target.textContent = 'Зберегти попри пропуски';
-      dlg.querySelector('.ef .err:not(:empty)')?.closest('.ef')?.scrollIntoView({ block: 'center' });
-      return;
-    }
-    const changed = JSON.stringify(next.points.map(p => NRK_KEYS.map(k => p[k] ?? ''))) !== before;
-    if (changed) {
-      r.data = next; r.amended = new Date().toISOString(); r.dirty = true; refreshReport(r);
-      toast(`Дані НРК «${r.data.unit || r.file}» оновлено. Плакат уже з ними; щоб зберегти зміни — завантажте оновлений звіт.`, 8000);
-    }
-    dlg.close();
-  });
-  dlg.addEventListener('close', () => { dlg.remove(); render(); $(`[data-nrk="${r.id}"]`, app)?.focus(); });
-  document.body.append(dlg);
-  dlg.showModal();
-  dlg.querySelector('.ef:not([hidden]) input, .ef:not([hidden]) textarea')?.focus();
+function closeEditor(next) {
+  const { r, form } = editing, host = $('#editor');
+  form.destroy(); editing = null;
+  host.hidden = true; app.hidden = false;
+  if (next && JSON.stringify(next) !== JSON.stringify(normalizeData(r.data))) {
+    r.data = next; r.amended = new Date().toISOString(); r.dirty = true; refreshReport(r);
+    toast(`Зміни «${r.data.unit || r.file}» збережено тут — плакат уже з ними. Щоб зберегти їх у файлі, завантажте оновлений звіт.`, 8000);
+  }
+  render(); window.scrollTo({ top: 0 });
+  $(`[data-edit="${r.id}"]`, app)?.focus();
 }
 
 app.addEventListener('click', e => {
@@ -357,20 +314,20 @@ app.addEventListener('click', e => {
   if (t.id === 'drop') $('#open').click();
   else if (t.dataset.poster) poster(byId(t.dataset.poster));
   else if (t.dataset.report) report(byId(t.dataset.report));
-  else if (t.dataset.nrk) editNrk(byId(t.dataset.nrk));
+  else if (t.dataset.edit) openEditor(byId(t.dataset.edit));
   else if (t.id === 'updated') updatedReports();
   else if (t.dataset.details) { const r = byId(t.dataset.details); r.open = !r.open; render(); $(`[data-details="${r.id}"]`, app)?.focus(); }
-  else if (t.dataset.del) { const r = byId(t.dataset.del); if (r.dirty && !confirm(`${r.data.unit || r.file}: доповнені дані ще не збережено в звіті. Прибрати все одно?`)) return; reports = reports.filter(x => x !== r); render(); }
+  else if (t.dataset.del) { const r = byId(t.dataset.del); if (r.dirty && !confirm(`${r.data.unit || r.file}: зміни ще не збережено в звіті. Прибрати все одно?`)) return; reports = reports.filter(x => x !== r); render(); }
   else if (t.id === 'all') allPosters();
   else if (t.id === 'sheet') sheet();
   else if (t.id === 'needs') needsSheet();
-  else if (t.id === 'clear') { if (confirm(reports.some(r => r.dirty) ? 'Є доповнені дані, які ще не збережено в звітах. Прибрати всі звіти все одно?' : 'Прибрати всі відкриті звіти зі списку?')) { reports = []; render(); } }
+  else if (t.id === 'clear') { if (confirm(reports.some(r => r.dirty) ? 'Є зміни, які ще не збережено в звітах. Прибрати всі звіти все одно?' : 'Прибрати всі відкриті звіти зі списку?')) { reports = []; render(); } }
 });
 app.addEventListener('change', e => { if (e.target.id === 'open') { addFiles(e.target.files); e.target.value = ''; } });
 app.addEventListener('keydown', e => { if (e.target.id === 'openl' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); if (!busy) $('#open').click(); } });
-addEventListener('dragover', e => { e.preventDefault(); $('#drop')?.classList.add('over'); });
+addEventListener('dragover', e => { e.preventDefault(); if (!editing) $('#drop')?.classList.add('over'); });
 addEventListener('dragleave', e => { if (!e.relatedTarget) $('#drop')?.classList.remove('over'); });
-addEventListener('drop', e => { e.preventDefault(); $('#drop')?.classList.remove('over'); if (!busy) addFiles(e.dataTransfer.files); });
+addEventListener('drop', e => { e.preventDefault(); $('#drop')?.classList.remove('over'); if (!busy && !editing) addFiles(e.dataTransfer.files); });
 
 // Діалог із кількома підписаними кнопками; повертає id обраної (Esc або закриття — останній варіант)
 function choose(title, text, options) {
@@ -395,5 +352,5 @@ function toast(msg, ms = 5000) {
 }
 
 render();
-// доповнені дані живуть лише тут, доки не завантажено оновлений звіт
-addEventListener('beforeunload', e => { if (reports.some(r => r.dirty)) { e.preventDefault(); e.returnValue = ''; } });
+// змінені дані живуть лише тут, доки не завантажено оновлений звіт
+addEventListener('beforeunload', e => { if (editing || reports.some(r => r.dirty)) { e.preventDefault(); e.returnValue = ''; } });

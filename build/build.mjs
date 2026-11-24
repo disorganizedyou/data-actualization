@@ -18,9 +18,16 @@ const read = p => readFileSync(resolve(ROOT, p), 'utf8');
 const shared = (...names) => ['text', 'icons', 'schema', 'validate', 'codec', 'pdfkit', 'report', ...names].map(n => `src/shared/${n}.mjs`);
 // В анкеті модуля плаката немає взагалі — підрозділи плакат не генерують
 export const TARGETS = {
-  'anketa.html': { template: 'src/form/index.html', css: 'src/form/form.css', modules: [...shared('review'), 'src/form/app.mjs'] },
-  'medsluzhba.html': { template: 'src/med/index.html', css: 'src/med/med.css', modules: [...shared('poster'), 'src/med/app.mjs'] },
+  'anketa.html': { template: 'src/form/index.html', css: 'src/form/form.css', modules: [...shared('review'), 'src/form/app.mjs', 'src/form/main.mjs'] },
+  // медслужба редагує звіти тією самою анкетою (src/form/app.mjs у режимі 'med'); її стилі — у shadow DOM (FORM_CSS)
+  'medsluzhba.html': { template: 'src/med/index.html', css: 'src/med/med.css', modules: [...shared('poster', 'review'), 'src/form/app.mjs', 'src/med/app.mjs'], formCss: true },
 };
+
+// Стилі анкети для shadow DOM: :root і body → :host, html — прибрати
+export const shadowCss = css => css
+  .replace(/^html\s*\{[^}]*\}\s*$/m, '')
+  .replace(/:root\b/g, ':host')
+  .replace(/(^|[\s,{])body(?=\s*[{,])/g, '$1:host');
 
 export function stripModule(src, name) {
   let out = src
@@ -83,7 +90,8 @@ export function build({ version = process.env.BUILD_VERSION || gitVersion(), out
   for (const [name, t] of Object.entries(TARGETS)) {
     const out = resolve(outDir, name);
     checkDuplicates(t.modules);
-    const app = `(() => {\n'use strict';\nconst BUILD_VERSION = ${jsString(version)};\n${t.modules.map(m => stripModule(read(m), m)).join('\n')}\n})();`;
+    const formCss = t.formCss ? `const FORM_CSS = ${jsString(shadowCss(read('src/form/form.css')))};\n` : '';
+    const app = `(() => {\n'use strict';\nconst BUILD_VERSION = ${jsString(version)};\n${formCss}${t.modules.map(m => stripModule(read(m), m)).join('\n')}\n})();`;
     syntaxCheck(app, name);
     const scripts = [vendor, fonts, app];
     for (const sc of scripts) if (/<\/script/i.test(sc) || (/<!--/.test(sc) && /<script/i.test(sc))) throw new Error(`${name}: тіло скрипта зламає HTML-парсер (</script або <!-- … <script)`);

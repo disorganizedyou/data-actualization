@@ -216,49 +216,54 @@ assert.match(await mpage.textContent('tr:has(.unit:text("МР"))'), /стара 
 assert.match(legacyRow, /стара форма/); assert.match(legacyRow, /1 помилка/, 'нові поля старого звіту — не «помилки»; єдина помилка — підрозділ «МР» не зі списку');
 const regen = await mdl('[data-report]'); assert.match(regen.name, /^Zvit_med_/);
 
-console.log('▶ медслужба: доповнення даних НРК і оновлений звіт');
+console.log('▶ медслужба: редагування звіту в анкеті, оновлений звіт і плакат');
 await mpage.click('#clear');
 await mpage.setInputFiles('#open', report.path);
 await mpage.waitForSelector('.tbl');
 const row2 = 'tr:has(.unit:text("2МБ"))';
-await mpage.click(`${row2} [data-nrk]`);
-await mpage.waitForSelector('dialog.edit');
-assert.equal(await mpage.inputValue('#nrk_0_nrk_model'), FULL.points[0].nrk_model, 'у вікні — поточні дані звіту');
-assert.ok(await mpage.isHidden('.ef[data-i="1"][data-f="nrk_model"]'), 'точка без НРК — поля НРК приховані');
-await mpage.fill('#nrk_0_nrk_model', 'Рись-М (2 шт.)');
-await mpage.fill('#nrk_0_nrk_mod_note', 'кріплення для ношів, додатковий акумулятор, антена');
-// друга точка: з’явився НРК — без моделі перше «Зберегти» показує пропуски
-await mpage.check('input[name="nrk_1_nrk"][value="Є"]');
-assert.ok(await mpage.isVisible('.ef[data-i="1"][data-f="nrk_model"]'));
-await mpage.click('dialog.edit [data-act="save"]');
-assert.ok(await mpage.isVisible('dialog.edit'), 'пропуски — вікно лишається відкритим');
-assert.match(await mpage.textContent('.ef[data-i="1"][data-f="nrk_model"] .err'), /Обов’язкове/);
-await mpage.fill('#nrk_1_nrk_count', '1'); await mpage.fill('#nrk_1_nrk_model', 'Термит');
-for (const k of ['nrk_reb', 'nrk_cam', 'nrk_mic']) await mpage.check(`input[name="nrk_1_${k}"][value="Ні"]`);
-await mpage.check('input[name="nrk_1_nrk_mod"][value="Ні"]');
-assert.ok(await mpage.isHidden('.ef[data-i="1"][data-f="nrk_mod_note"]'), '«Ні» — опис переобладнання прихований');
-await mpage.click('dialog.edit [data-act="save"]');
-await mpage.waitForSelector('dialog.edit', { state: 'detached' });
+// редагування: та сама анкета, у режимі медслужби
+await mpage.click(`${row2} [data-edit]`);
+await mpage.waitForSelector('#editor .h2');
+assert.ok(await mpage.isHidden('#app'), 'список схований, поки відкрита анкета');
+assert.match(await mpage.textContent('#editor .bar'), /Редагування звіту/);
+// «Скасувати» не змінює звіт
+await mpage.click('#editor [data-step="1"]');
+await mpage.fill('[data-path="kb_callsign"]', 'Тимчасовий'); await mpage.dispatchEvent('[data-path="kb_callsign"]', 'change');
+await mpage.click('#editor [data-med="cancel"]');
+await mpage.waitForSelector('#editor', { state: 'hidden' });
+assert.doesNotMatch(await mpage.textContent(row2), /змінено/, '«Скасувати» — звіт без змін');
+// справжні зміни: позивний чергового, модель НРК, нова точка
+await mpage.click(`${row2} [data-edit]`);
+await mpage.click('#editor [data-step="1"]');
+assert.equal(await mpage.inputValue('[data-path="kb_callsign"]'), FULL.kb_callsign, 'після «Скасувати» — початкові дані');
+await mpage.fill('[data-path="kb_callsign"]', 'Беркут-2'); await mpage.dispatchEvent('[data-path="kb_callsign"]', 'change');
+await mpage.click('#editor [data-step="4"]');
+await mpage.fill('[data-path="points.0.nrk_model"]', 'Рись-М (2 шт.)'); await mpage.dispatchEvent('[data-path="points.0.nrk_model"]', 'change');
+await mpage.fill('[data-path="points.0.nrk_mod_note"]', 'кріплення для ношів, додатковий акумулятор, антена'); await mpage.dispatchEvent('[data-path="points.0.nrk_mod_note"]', 'change');
+await mpage.click('#editor [data-step="6"]');
+assert.match(await mpage.textContent('#editor .rv-head'), /змінено 3 відповіді/, 'огляд показує зміни відносно звіту');
+await mpage.click('#editor .dl [data-med="save"]');
+await mpage.waitForSelector('#editor', { state: 'hidden' });
 assert.match(await mpage.textContent(`${row2} .st`), /змінено, не збережено/);
 await mpage.click(`${row2} [data-details]`);
-assert.match(await mpage.textContent('.details'), /Термит/);
-const poster2 = await mdl(`${row2} [data-poster]`);
-assert.equal(pageCount(poster2.bytes), 1, 'плакат з даними НРК — на один аркуш');
-await mpage.screenshot({ path: resolve(OUT, 'med-nrk.png'), fullPage: true });
+assert.match(await mpage.textContent('.details'), /Беркут-2/);
+assert.match(await mpage.textContent('.details'), /Рись-М \(2 шт\.\)/);
+const poster2 = await mdl(`${row2} [data-poster]`, 'edit_');
+assert.equal(pageCount(poster2.bytes), 1, 'плакат зі зміненими даними — на один аркуш');
+await mpage.screenshot({ path: resolve(OUT, 'med-edited.png'), fullPage: true });
 const upd = await mdl('#updated', 'upd_');
 const updPayload = await readPdfBytes(upd.bytes, { inflate });
-assert.equal(updPayload.data.points[0].nrk_model, 'Рись-М (2 шт.)', 'доповнення збережено в оновленому звіті');
-assert.equal(updPayload.data.points[1].nrk_model, 'Термит');
-assert.equal(updPayload.data.points[1].nrk_mod, 'Ні');
-assert.match(updPayload.amended || '', /^\d{4}-\d{2}-\d{2}T/, 'позначка «доповнено медслужбою» у файлі');
+assert.equal(updPayload.data.kb_callsign, 'Беркут-2', 'зміни збережено в оновленому звіті');
+assert.equal(updPayload.data.points[0].nrk_model, 'Рись-М (2 шт.)');
+assert.match(updPayload.amended || '', /^\d{4}-\d{2}-\d{2}T/, 'позначка «змінено медслужбою» у файлі');
 assert.equal(updPayload.build, payload.build, 'версія анкети підрозділу зберігається');
 await mpage.waitForSelector('#updated', { state: 'detached', timeout: 5000 });   // після завантаження — незбереженого не лишилося
-assert.match(await mpage.textContent(`${row2} .st`), /НРК доповнено/);
-// повторне відкриття оновленого звіту разом зі старим — береться доповнений
+assert.match(await mpage.textContent(`${row2} .st`), /змінено медслужбою/);
+// повторне відкриття оновленого звіту разом зі старим — береться змінений
 await mpage.click('#clear');
 await mpage.setInputFiles('#open', [report.path, resolve(OUT, upd.name)]);
 await mpage.waitForSelector('.tbl');
-assert.match(await mpage.textContent(`${row2} .st`), /НРК доповнено/, 'з двох звітів однієї дати — доповнений');
+assert.match(await mpage.textContent(`${row2} .st`), /змінено медслужбою/, 'з двох звітів однієї дати — змінений медслужбою');
 
 console.log('▶ анкета на екрані комп’ютера: клавіатура, «Далі», історія, дублювання, огляд змін');
 const dctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, locale: 'uk-UA' });

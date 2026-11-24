@@ -161,7 +161,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '', bu
     ...(draft ? { background: () => ({ text: 'ЧЕРНЕТКА', color: '#f3d3d5', bold: true, fontSize: 78, font: THEME.head, alignment: 'center', margin: [0, 360, 0, 0] }) } : {}),
     header: cur => cur > 1 ? { margin: [PAGE.m, 18, PAGE.m, 0], fontSize: 7, color: C.grey, text: tag } : null,
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${amended ? ` Дані НРК доповнено медслужбою ${fmtDate(amended.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${build ? ` Анкета ${build}.` : ''}` },
+      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${amended ? ` Дані змінено медслужбою ${fmtDate(amended.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${build ? ` Анкета ${build}.` : ''}` },
       { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }),
   };
 }
