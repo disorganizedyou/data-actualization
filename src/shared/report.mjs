@@ -14,6 +14,8 @@ export const cellText = (f, o) => f.t !== 'group' ? o[f.k] : [
 
 export const trainingTotal = p => LEVELS.reduce((s, [k]) => s + (+p[`training_${k}`] > 0 ? +p[`training_${k}`] : 0), 0);
 export const nrkShort = p => p.nrk === 'Є' ? `Є${hasText(p.nrk_count) ? ` · ${p.nrk_count.trim()}` : ''}` : p.nrk;
+// Чим обладнано НРК (РЕБ, камера, мікрофон) — лише те, що «Так»
+export const nrkFeatures = p => [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([k]) => p[k] === 'Так').map(([, n]) => n);
 export const nonEmpty = p => p && Object.values(p).some(hasText);
 
 // Контакти начальника медпункту стовпчиком: іконка + значення. skipNone — не показувати «Немає» (плакат)
@@ -49,7 +51,8 @@ export function collectNeeds(d) {
 // d — нормалізовані дані; opts.kind 'report' | 'draft'; opts.created — ISO-рядок часу формування;
 // opts.version — версія збірки, що формує PDF; opts.build — версія анкети, якою заповнено дані (за замовчуванням = version;
 // медслужба при повторному формуванні передає початкову)
-export function buildReport(d, { kind = 'report', created = '', version = '', build = version, regenerated = '' } = {}) {
+// opts.amended — коли медслужба доповнила дані (ISO-час): зберігається у файлі й згадується у футері
+export function buildReport(d, { kind = 'report', created = '', version = '', build = version, regenerated = '', amended = '' } = {}) {
   const k = kit(1), { z, val, lab, sec, pill } = k;
   const pts = sectionById('points'), pos = sectionById('drops'), algo = sectionById('algo'), mp = sectionById('mphelp');
   const LW = +(PAGE.cw * .3).toFixed(1);
@@ -147,7 +150,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '', bu
     sec(T(mp)), kv(mp.fields, d),
     sec('Потреби та зауваги'), needsBlock,
   ];
-  const payload = makePayload(d, { kind, created, build }), emb = pdfEmbedding(payload);
+  const payload = makePayload(d, { kind, created, build, amended }), emb = pdfEmbedding(payload);
   const tag = [draft ? 'Чернетка' : 'Повний звіт', unit, fmtDate(d.date)].filter(hasText).join('  ·  ');
   return {
     pageSize: 'A4', pageMargins: [PAGE.m, 40, PAGE.m, 44], content, pageBreakBefore: keepHeadings,
@@ -158,7 +161,7 @@ export function buildReport(d, { kind = 'report', created = '', version = '', bu
     ...(draft ? { background: () => ({ text: 'ЧЕРНЕТКА', color: '#f3d3d5', bold: true, fontSize: 78, font: THEME.head, alignment: 'center', margin: [0, 360, 0, 0] }) } : {}),
     header: cur => cur > 1 ? { margin: [PAGE.m, 18, PAGE.m, 0], fontSize: 7, color: C.grey, text: tag } : null,
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${build ? ` Анкета ${build}.` : ''}` },
+      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${amended ? ` Дані НРК доповнено медслужбою ${fmtDate(amended.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${build ? ` Анкета ${build}.` : ''}` },
       { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }),
   };
 }

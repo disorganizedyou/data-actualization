@@ -4,7 +4,7 @@ import { ROLES, CONTACT, sectionById, dropsDone, noDrops, unitName, NONE } from 
 import { hasText, fmtDate, plural } from './text.mjs';
 import { kit, C, THEME, PAGE, ROLE_STYLE, T, textWidth, starWidth } from './pdfkit.mjs';
 import { iconSvg } from './icons.mjs';
-import { nrkShort, nonEmpty, collectNeeds, headContacts } from './report.mjs';
+import { nrkShort, nrkFeatures, nonEmpty, collectNeeds, headContacts } from './report.mjs';
 
 export const MIN_SCALE = 0.5;
 
@@ -53,19 +53,39 @@ export function buildPoster(d, sc = 1, { version = '', warn = '' } = {}) {
         headContacts(k, d, { width: starWidth(MW, PAGE.cw), size: z(9.5), iconColor: C.ink, skipNone: true })]] } };
 
   const pointRows = (d.points || []).filter(nonEmpty);
-  const nrkCell = p => {
-    if (!hasText(p.nrk)) return val('', z(9.5));
-    if (p.nrk !== 'Є') return { text: NONE, color: C.grey, fontSize: z(9.5) };
-    const feats = [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([kk]) => p[kk] === 'Так').map(([, n]) => n);
-    return { stack: [{ text: nrkShort(p), bold: true, fontSize: z(9.5) }, ...(feats.length ? [{ text: feats.join(', '), color: C.grey, fontSize: z(8) }] : [])] };
-  };
+  const nrkCell = p => !hasText(p.nrk) ? val('', z(9.5))
+    : p.nrk !== 'Є' ? { text: NONE, color: C.grey, fontSize: z(9.5) } : { text: nrkShort(p), bold: true, fontSize: z(9.5) };
   const PW = [z(18), '*', z(116), z(90), z(66), '*'], PSW = starWidth(PW, PAGE.cw), fitP11 = k.fit(PSW, z(11)), fitP9 = k.fit(PSW, z(9.5));
-  const points = pointRows.length ? { layout: k.lines(true, 4), table: { headerRows: 1, dontBreakRows: true,
+  // НРК детально — окремим рядком під точкою на всю ширину (модель, обладнання, переобладнання бувають довгими)
+  const nrkWide = k.fit(starWidth([z(18), '*'], PAGE.cw), z(9));
+  const nrkRow = p => {
+    if (p.nrk !== 'Є') return null;
+    const feats = nrkFeatures(p);
+    const parts = [
+      { text: 'НРК:  ', color: C.grey },
+      hasText(p.nrk_model) ? { text: nrkWide(p.nrk_model.trim()), bold: true } : { text: 'модель не вказано', color: C.grey },
+      ...(feats.length ? [{ text: '   ·   ' + feats.join(', '), color: C.ink }] : []),
+      ...(p.nrk_mod === 'Так' ? [{ text: '   ·   Переобладнано: ', color: C.grey }, { text: hasText(p.nrk_mod_note) ? nrkWide(p.nrk_mod_note.trim()) : '—', bold: true }] : []),
+    ];
+    return [{ text: '' }, { colSpan: 5, text: parts, fontSize: z(9), lineHeight: 1.2 }, {}, {}, {}, {}];
+  };
+  const pointBody = [], nrkRowIdx = new Set();
+  pointRows.forEach((p, i) => {
+    pointBody.push([num(i), val(fitP11(p.name), z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
+      { stack: [val(p.net, z(9.5)), ...(hasText(p.net_note) ? [{ text: p.net_note.trim(), color: C.grey, fontSize: z(8.5) }] : [])] },
+      nrkCell(p), val(fitP9(p.contact), z(9.5))]);
+    const extra = nrkRow(p);
+    if (extra) { pointBody.push(extra); nrkRowIdx.add(pointBody.length); }   // індекс у body з урахуванням рядка заголовків
+  });
+  // рядок НРК — частина точки: без лінії над ним і з меншим відступом
+  const base = k.lines(true, 4);
+  const pointsLayout = { ...base,
+    hLineWidth: (i, node) => nrkRowIdx.has(i) ? 0 : base.hLineWidth(i, node),
+    paddingTop: i => nrkRowIdx.has(i) ? 0 : base.paddingTop(i),
+    paddingBottom: i => nrkRowIdx.has(i + 1) ? z(2) : base.paddingBottom(i) };
+  const points = pointRows.length ? { layout: pointsLayout, table: { headerRows: 1, dontBreakRows: true,
     widths: PW,
-    body: [[head('№'), head('Назва / орієнтир'), head('Координати MGRS'), head('Інтернет'), head('НРК'), head('Зв’язок з точкою')],
-      ...pointRows.map((p, i) => [num(i), val(fitP11(p.name), z(11)), { ...val(p.coords, z(10.5)), noWrap: true },
-        { stack: [val(p.net, z(9.5)), ...(hasText(p.net_note) ? [{ text: p.net_note.trim(), color: C.grey, fontSize: z(8.5) }] : [])] },
-        nrkCell(p), val(fitP9(p.contact), z(9.5))])] } }
+    body: [[head('№'), head('Назва / орієнтир'), head('Координати MGRS'), head('Інтернет'), head('НРК'), head('Зв’язок з точкою')], ...pointBody] } }
     : { text: 'Точок не вказано', color: C.grey };
 
   const posRows = (d.positions || []).filter(nonEmpty);

@@ -22,7 +22,7 @@ test('конверт: кодування → маркер → розбір', () 
   const { marker } = encodePayload(p);
   assert.match(marker, /^DANIFORM2:[A-Za-z0-9_-]+\.[0-9a-f]{8}$/);
   const back = parsePayload(findMarker(`garbage ${marker} more`));
-  assert.equal(back.kind, 'report'); assert.equal(back.v, 5);
+  assert.equal(back.kind, 'report'); assert.equal(back.v, 6);
   assert.deepEqual(back.data, p.data);
 });
 
@@ -98,4 +98,12 @@ test('розпакування вкладення обмежене за розм
   const bomb = deflateSync(Buffer.alloc(3 * 1024 * 1024, 0x61)); // 3 МБ «a» → кілька КБ
   const pdf = new Uint8Array([...enc(`%PDF-1.3\n<< /Type /EmbeddedFile /Length ${bomb.length} /Filter /FlateDecode >>\nstream\n`), ...bomb, ...enc('\nendstream\n%%EOF')]);
   await assert.rejects(readPdfBytes(pdf), /Завеликі/); // без inflate — вбудований DecompressionStream Node 22
+});
+
+test('позначка «доповнено медслужбою» зберігається у файлі; сміття відкидається', () => {
+  const p = makePayload(FULL, { kind: 'report', created: '2026-10-31T10:00:00Z', build: '2026.11.1-abc1234', amended: '2026-11-24T09:30:00.000Z' });
+  const back = parsePayload(findMarker(encodePayload(p).marker));
+  assert.equal(back.amended, '2026-11-24T09:30:00.000Z'); assert.equal(back.build, '2026.11.1-abc1234');
+  const bad = parsePayload(findMarker(encodePayload({ ...p, amended: '<script>' }).marker));
+  assert.equal(bad.amended, undefined);
 });

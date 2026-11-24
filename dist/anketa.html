@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-BrbrZuvTdLp+SI8DqbQRMk9hFsBAIbLKiYlWtMEyn3s='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-FZZQbLPzjUFEzG6gL907oo6Th4639jwHl0XsMUEzKfY=' 'sha256-rJQL4eHDZr/RUP4CupTI0PpxSGlvWozmOHJ0rAW89vo=' 'sha256-XsNjj1kyRQFSLzBRmgF7UD2L8zOb28m8zfeOI2fycHE='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Анкета актуалізації даних — медична служба</title>
 <style>
 :root {
@@ -78,7 +78,7 @@ b, strong { font-weight: 600; }
 .fld { align-content: start; }
 @container (min-width: 600px) {
   .fields, .grp-f { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 16px; }
-  .w2 { grid-column: span 2; } .w3 { grid-column: span 3; } .w6 { grid-column: 1 / -1; }
+  .w2 { grid-column: span 2; } .w3 { grid-column: span 3; } .w4 { grid-column: span 4; } .w6 { grid-column: 1 / -1; }
   /* Поля в одному ряду мають спільні «рядки»: підпис · підказка · поле · помилка (subgrid).
      Тож поля стоять на одній лінії, хоч би який довгий був підпис і хоч би під яким полем з’явилась помилка. */
   .fields, .grp-f { row-gap: 0; }
@@ -302,7 +302,7 @@ pdfMake.setFonts({
 })();</script>
 <script>(() => {
 'use strict';
-const BUILD_VERSION = "2026.11.1-703737d";
+const BUILD_VERSION = "2026.11.1-4e371c6";
 // ---- src/shared/text.mjs ----
 // Дрібні текстові помічники, спільні для форми, звіту, плаката та тестів.
 
@@ -373,10 +373,10 @@ const iconSvg = (name, color = 'currentColor') =>
 //   ph       плейсхолдер
 //   hint     підказка під полем
 //   el       підпис у списку помилок, якщо l без контексту картки неоднозначний (за замовчуванням = l)
-//   w        ширина поля на широкому екрані в шостих частках рядка: 2 (третина), 3 (половина), 6 (весь рядок);
+//   w        ширина поля на широкому екрані в шостих частках рядка: 2 (третина), 3 (половина), 4 (дві третини), 6 (весь рядок);
 //            без w — за типом поля (див. spanOf у src/form/app.mjs)
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 const NONE = 'Немає';
 const TITLE = 'Актуалізація даних для медичної служби';
 const FORM_NAME = 'Анкета актуалізації даних';
@@ -485,10 +485,15 @@ const POINT_GROUPS = [
   { id: 'nrk', title: 'НРК — наземний роботизований комплекс', fields: [
     { k: 'nrk', l: 'Чи є НРК на точці', pl: 'НРК', t: 'seg', o: OPT.have, req: true, w: 2 },
     { k: 'nrk_count', l: 'Кількість НРК', pl: 'Кількість НРК', v: 'count', min: 1, max: 3, req: true, showIf: ['nrk', ['Є']], w: 2 },
-    { k: 'nrk_note', l: 'Модель, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: модель, стан', w: 2 },
+    { k: 'nrk_model', l: 'Модель і назва НРК', pl: 'Модель / назва', max: 120, req: true, showIf: ['nrk', ['Є']], w: 2,
+      ph: 'наприклад: Рись-М', hint: 'Якщо НРК різні — перелічіть усі' },
     { k: 'nrk_reb', l: 'Чи обладнані засобами РЕБ', pl: 'РЕБ', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
     { k: 'nrk_cam', l: 'Чи обладнані камерою', pl: 'Камера', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
     { k: 'nrk_mic', l: 'Чи обладнані мікрофоном', pl: 'Мікрофон', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
+    { k: 'nrk_mod', l: 'Чи переобладнано НРК', pl: 'Переобладнано', t: 'seg', o: OPT.yn, req: true, showIf: ['nrk', ['Є']], w: 2 },
+    { k: 'nrk_mod_note', l: 'Що саме переобладнано', pl: 'Що переобладнано', t: 'area', max: 300, req: true, w: 4,
+      showIf: it => it?.nrk === 'Є' && it?.nrk_mod === 'Так', ph: 'наприклад: встановлено кріплення для ношів і додатковий акумулятор' },
+    { k: 'nrk_note', l: 'Інше, уточнення', pl: 'Уточнення', max: 200, showIf: ['nrk', ['Є']], ph: 'наприклад: стан, де зберігається', w: 6 },
   ] },
   { id: 'hypo', title: 'Засоби проти гіпотермії', fields: [
     { k: 'hypo_heat', l: 'Хімічні грілки', pl: 'Хімічні грілки', t: 'seg', o: OPT.have, req: true, w: 2 },
@@ -870,8 +875,10 @@ const warningsOf = problems => problems.filter(p => p.level === 'warn');
 const missingOf = problems => problems.filter(p => p.level === 'error' && p.kind === 'missing');
 const invalidOf = problems => problems.filter(p => p.level === 'error' && p.kind !== 'missing');
 // Помилки «нових полів» — для звітів попередніх версій форми це очікувано:
-// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичний пункт
-const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other', ...MEDPOINT_FIELD_KEYS];
+// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичний пункт;
+// v5 → v6: модель НРК і переобладнання
+const NRK_V6_KEYS = ['nrk_model', 'nrk_mod', 'nrk_mod_note'];
+const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other', ...MEDPOINT_FIELD_KEYS, ...NRK_V6_KEYS];
 const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)
@@ -931,9 +938,12 @@ function crc32(bytes) {
 // ---- Конверт ----
 // kind: 'report' — повний перевірений звіт; 'draft' — чернетка (може містити помилки)
 // build — версія збірки анкети, якою заповнено дані (щоб медслужба бачила застарілі анкети)
+// amended — коли медслужба доповнила дані звіту (ISO-час), щоб позначка збереглася при повторному відкритті
 const BUILD_RE = /^[\w.\-+]{1,40}$/;
-function makePayload(data, { kind = 'report', created, build } = {}) {
-  return { app: 'med-data-actualization', v: SCHEMA_VERSION, kind, created, ...(BUILD_RE.test(build || '') ? { build } : {}), data: normalizeData(data) };
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/;
+function makePayload(data, { kind = 'report', created, build, amended } = {}) {
+  return { app: 'med-data-actualization', v: SCHEMA_VERSION, kind, created, ...(BUILD_RE.test(build || '') ? { build } : {}),
+    ...(ISO_RE.test(amended || '') ? { amended } : {}), data: normalizeData(data) };
 }
 function encodePayload(payload) {
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
@@ -948,7 +958,8 @@ function parsePayload(text) {
   if (typeof p.v !== 'number' || p.v > SCHEMA_VERSION) throw new Error('Файл створено новішою версією форми — оновіть форму');
   if (!p.data || typeof p.data !== 'object' || Array.isArray(p.data)) throw new Error('Пошкоджені дані у файлі');
   return { v: p.v, kind: p.kind === 'draft' ? 'draft' : 'report', created: typeof p.created === 'string' ? p.created : undefined,
-    build: typeof p.build === 'string' && BUILD_RE.test(p.build) ? p.build : undefined, data: migrate(p.data, p.v) };
+    build: typeof p.build === 'string' && BUILD_RE.test(p.build) ? p.build : undefined,
+    amended: typeof p.amended === 'string' && ISO_RE.test(p.amended) ? p.amended : undefined, data: migrate(p.data, p.v) };
 }
 
 // Міграція даних зі старіших версій схеми.
@@ -960,6 +971,8 @@ function parsePayload(text) {
 //   v3 → v4: новий розділ про медичні пункти (список).
 //   v4 → v5: медпункт у підрозділі один — список medpoints замінено полями mp_coords і mphead_*
 //            (з v4 беремо перший медпункт; назва медпункту більше не збирається).
+//   v5 → v6: нові поля НРК (модель і назва, чи переобладнано, що саме) — достатньо нормалізації;
+//            у звітах, заповнених раніше, їх доповнює медслужба (інструмент медслужби, «Доповнити НРК»).
 //   Для всіх версій: обладнання НРК (РЕБ/камера/мікрофон) — лише Так/Ні; давнє «Частково»
 //   не вгадуємо, а очищаємо — форма попросить відповісти заново.
 const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
@@ -1218,6 +1231,8 @@ const cellText = (f, o) => f.t !== 'group' ? o[f.k] : [
 
 const trainingTotal = p => LEVELS.reduce((s, [k]) => s + (+p[`training_${k}`] > 0 ? +p[`training_${k}`] : 0), 0);
 const nrkShort = p => p.nrk === 'Є' ? `Є${hasText(p.nrk_count) ? ` · ${p.nrk_count.trim()}` : ''}` : p.nrk;
+// Чим обладнано НРК (РЕБ, камера, мікрофон) — лише те, що «Так»
+const nrkFeatures = p => [['nrk_reb', 'РЕБ'], ['nrk_cam', 'камера'], ['nrk_mic', 'мікрофон']].filter(([k]) => p[k] === 'Так').map(([, n]) => n);
 const nonEmpty = p => p && Object.values(p).some(hasText);
 
 // Контакти начальника медпункту стовпчиком: іконка + значення. skipNone — не показувати «Немає» (плакат)
@@ -1253,7 +1268,8 @@ function collectNeeds(d) {
 // d — нормалізовані дані; opts.kind 'report' | 'draft'; opts.created — ISO-рядок часу формування;
 // opts.version — версія збірки, що формує PDF; opts.build — версія анкети, якою заповнено дані (за замовчуванням = version;
 // медслужба при повторному формуванні передає початкову)
-function buildReport(d, { kind = 'report', created = '', version = '', build = version, regenerated = '' } = {}) {
+// opts.amended — коли медслужба доповнила дані (ISO-час): зберігається у файлі й згадується у футері
+function buildReport(d, { kind = 'report', created = '', version = '', build = version, regenerated = '', amended = '' } = {}) {
   const k = kit(1), { z, val, lab, sec, pill } = k;
   const pts = sectionById('points'), pos = sectionById('drops'), algo = sectionById('algo'), mp = sectionById('mphelp');
   const LW = +(PAGE.cw * .3).toFixed(1);
@@ -1351,7 +1367,7 @@ function buildReport(d, { kind = 'report', created = '', version = '', build = v
     sec(T(mp)), kv(mp.fields, d),
     sec('Потреби та зауваги'), needsBlock,
   ];
-  const payload = makePayload(d, { kind, created, build }), emb = pdfEmbedding(payload);
+  const payload = makePayload(d, { kind, created, build, amended }), emb = pdfEmbedding(payload);
   const tag = [draft ? 'Чернетка' : 'Повний звіт', unit, fmtDate(d.date)].filter(hasText).join('  ·  ');
   return {
     pageSize: 'A4', pageMargins: [PAGE.m, 40, PAGE.m, 44], content, pageBreakBefore: keepHeadings,
@@ -1362,7 +1378,7 @@ function buildReport(d, { kind = 'report', created = '', version = '', build = v
     ...(draft ? { background: () => ({ text: 'ЧЕРНЕТКА', color: '#f3d3d5', bold: true, fontSize: 78, font: THEME.head, alignment: 'center', margin: [0, 360, 0, 0] }) } : {}),
     header: cur => cur > 1 ? { margin: [PAGE.m, 18, PAGE.m, 0], fontSize: 7, color: C.grey, text: tag } : null,
     footer: (cur, total) => ({ margin: [PAGE.m, 14, PAGE.m, 0], fontSize: 6.5, color: C.grey, columns: [
-      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${build ? ` Анкета ${build}.` : ''}` },
+      { text: `${draft ? 'Чернетка' : 'Повний звіт'}. Цей PDF можна відкрити у формі «${FORM_NAME}» для редагування.${created ? ` Сформовано ${fmtDate(created.slice(0, 10))}.` : ''}${amended ? ` Дані НРК доповнено медслужбою ${fmtDate(amended.slice(0, 10))}.` : ''}${regenerated ? ` Повторно сформовано медслужбою ${fmtDate(regenerated.slice(0, 10))}.` : ''}${build ? ` Анкета ${build}.` : ''}` },
       { text: `${cur} / ${total}`, alignment: 'right', width: 40 }] }),
   };
 }
@@ -2201,8 +2217,10 @@ async function openPdf(file) {
     let msg = `${what} ${hasText(p.data.unit) ? `«${p.data.unit}» ` : ''}від ${fmtDate(p.data.date) || '—'} завантажено.`;
     const from = p.legacy ? 1 : p.data.migratedFrom;
     if (from) {
-      const what = [from < 2 && 'НРК, гіпотермія, хімзахист', from < 3 && 'чи здійснюють скиди інші підрозділи', from < 4 && 'координати й начальник медпункту'].filter(Boolean);
-      msg += from < 4 ? ` Це файл ${from === 1 ? 'старої' : 'попередньої'} версії форми: з’явилися нові питання (${what.join('; ')}) — їх треба заповнити.`
+      const nrkNew = from < 6 && (p.data.points || []).some(pt => pt.nrk === 'Є' && !hasText(pt.nrk_model));
+      const what = [from < 2 && 'НРК, гіпотермія, хімзахист', from < 3 && 'чи здійснюють скиди інші підрозділи', from < 4 && 'координати й начальник медпункту',
+        nrkNew && 'модель НРК і чи його переобладнано'].filter(Boolean);
+      msg += what.length ? ` Це файл ${from === 1 ? 'старої' : 'попередньої'} версії форми: з’явилися нові питання (${what.join('; ')}) — їх треба заповнити.`
         : ' Це файл попередньої версії форми — дані перенесено автоматично.';
       if (from < 3) msg += ' Питання про медичне майно об’єднано в одне — перевірте відповідь.';
     }

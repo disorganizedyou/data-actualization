@@ -59,3 +59,13 @@ test('collectNeeds збирає потреби й зауваги', () => {
   assert.match(txt, /Бракує медмайна: турнікети/); assert.match(txt, /спальників/); assert.match(txt, /Хімзахист — частково/); assert.match(txt, /НРК немає/); assert.match(txt, /Потрібна допомога/);
   assert.ok(!/бракує — бракує/.test(txt));
 });
+
+test('плакат: під точкою з НРК — модель, обладнання й переобладнання', () => {
+  const p = buildPoster(normalizeData(FULL), 1);
+  const txt = JSON.stringify(p.content);
+  assert.match(txt, /Рись-М/); assert.match(txt, /РЕБ, камера/); assert.match(txt, /Переобладнано/); assert.match(txt, /кріплення для ношів/);
+  const noMod = normalizeData({ ...FULL, points: [{ ...FULL.points[0], nrk_mod: 'Ні' }] });
+  assert.ok(!/Переобладнано/.test(JSON.stringify(buildPoster(noMod, 1).content)), 'без переобладнання — без рядка про нього');
+  const noModel = normalizeData({ ...FULL, points: [{ ...FULL.points[0], nrk_model: '' }] });
+  assert.match(JSON.stringify(buildPoster(noModel, 1).content), /модель не вказано/);
+});

@@ -263,8 +263,10 @@ export const warningsOf = problems => problems.filter(p => p.level === 'warn');
 export const missingOf = problems => problems.filter(p => p.level === 'error' && p.kind === 'missing');
 export const invalidOf = problems => problems.filter(p => p.level === 'error' && p.kind !== 'missing');
 // Помилки «нових полів» — для звітів попередніх версій форми це очікувано:
-// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичний пункт
-export const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other', ...MEDPOINT_FIELD_KEYS];
+// v1 → v2: НРК, гіпотермія, хімзахист; v2 → v3: чи здійснюють скиди інші підрозділи; v3 → v4: медичний пункт;
+// v5 → v6: модель НРК і переобладнання
+export const NRK_V6_KEYS = ['nrk_model', 'nrk_mod', 'nrk_mod_note'];
+export const NEW_FIELD_KEYS = ['nrk', 'nrk_count', 'nrk_reb', 'nrk_cam', 'nrk_mic', 'hypo_heat', 'hypo_bag', 'hypo_ready', 'ppe', 'ppe_note', 'drops_other', ...MEDPOINT_FIELD_KEYS, ...NRK_V6_KEYS];
 export const isNewFieldError = p => NEW_FIELD_KEYS.some(k => p.path === k || p.path.endsWith('.' + k));
 
 // Прогрес: скільки обов’язкових полів заповнено (для індикатора)

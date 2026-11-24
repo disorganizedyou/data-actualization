@@ -67,7 +67,7 @@ b, strong { font-weight: 600; }
 .fld { align-content: start; }
 @container (min-width: 600px) {
   .fields, .grp-f { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 16px; }
-  .w2 { grid-column: span 2; } .w3 { grid-column: span 3; } .w6 { grid-column: 1 / -1; }
+  .w2 { grid-column: span 2; } .w3 { grid-column: span 3; } .w4 { grid-column: span 4; } .w6 { grid-column: 1 / -1; }
   /* Поля в одному ряду мають спільні «рядки»: підпис · підказка · поле · помилка (subgrid).
      Тож поля стоять на одній лінії, хоч би який довгий був підпис і хоч би під яким полем з’явилась помилка. */
   .fields, .grp-f { row-gap: 0; }

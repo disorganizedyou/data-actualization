@@ -79,7 +79,12 @@ const fillPoint = async (i, p) => {
   if (p.net_note) await fill(path('net_note'), p.net_note);
   await seg(path('supplied'), p.supplied); if (p.supplied_note) await fill(path('supplied_note'), p.supplied_note);
   await seg(path('nrk'), p.nrk);
-  if (p.nrk === 'Є') { await fill(path('nrk_count'), p.nrk_count); for (const k of ['nrk_reb', 'nrk_cam', 'nrk_mic']) await seg(path(k), p[k]); if (p.nrk_note) await fill(path('nrk_note'), p.nrk_note); }
+  if (p.nrk === 'Є') {
+    await fill(path('nrk_count'), p.nrk_count); await fill(path('nrk_model'), p.nrk_model);
+    for (const k of ['nrk_reb', 'nrk_cam', 'nrk_mic', 'nrk_mod']) await seg(path(k), p[k]);
+    if (p.nrk_mod_note) await fill(path('nrk_mod_note'), p.nrk_mod_note);
+    if (p.nrk_note) await fill(path('nrk_note'), p.nrk_note);
+  }
   for (const k of ['hypo_heat', 'hypo_bag', 'hypo_ready']) await seg(path(k), p[k]);
   if (p.hypo_note) await fill(path('hypo_note'), p.hypo_note);
   await seg(path('ppe'), p.ppe); if (p.ppe_note) await fill(path('ppe_note'), p.ppe_note);
@@ -193,7 +198,8 @@ assert.equal(rows.length, 1, 'той самий підрозділ двічі �
 assert.match(await mpage.textContent('.tbl .st'), /повний/);
 await mpage.click('[data-details]');
 await mpage.screenshot({ path: resolve(OUT, 'med.png'), fullPage: true });
-const mdl = async sel => { const [dl] = await Promise.all([mpage.waitForEvent('download'), mpage.click(sel)]); const p = resolve(OUT, dl.suggestedFilename()); await dl.saveAs(p); return { name: dl.suggestedFilename(), bytes: new Uint8Array(readFileSync(p)) }; };
+// prefix — щоб файл з тією самою назвою (оновлений звіт) не перезаписав оригінал
+const mdl = async (sel, prefix = '') => { const [dl] = await Promise.all([mpage.waitForEvent('download'), mpage.click(sel)]); const name = prefix + dl.suggestedFilename(), p = resolve(OUT, name); await dl.saveAs(p); return { name, bytes: new Uint8Array(readFileSync(p)) }; };
 const poster = await mdl('[data-poster]');
 assert.equal(poster.name, 'Plakat_2MB_2026-10-30.pdf');
 assert.equal(pageCount(poster.bytes), 1, 'плакат на один аркуш');
@@ -209,6 +215,50 @@ const legacyRow = await mpage.textContent('tr:has(.unit:text("МР")) .st');
 assert.match(await mpage.textContent('tr:has(.unit:text("МР"))'), /стара анкета/);
 assert.match(legacyRow, /стара форма/); assert.match(legacyRow, /1 помилка/, 'нові поля старого звіту — не «помилки»; єдина помилка — підрозділ «МР» не зі списку');
 const regen = await mdl('[data-report]'); assert.match(regen.name, /^Zvit_med_/);
+
+console.log('▶ медслужба: доповнення даних НРК і оновлений звіт');
+await mpage.click('#clear');
+await mpage.setInputFiles('#open', report.path);
+await mpage.waitForSelector('.tbl');
+const row2 = 'tr:has(.unit:text("2МБ"))';
+await mpage.click(`${row2} [data-nrk]`);
+await mpage.waitForSelector('dialog.edit');
+assert.equal(await mpage.inputValue('#nrk_0_nrk_model'), FULL.points[0].nrk_model, 'у вікні — поточні дані звіту');
+assert.ok(await mpage.isHidden('.ef[data-i="1"][data-f="nrk_model"]'), 'точка без НРК — поля НРК приховані');
+await mpage.fill('#nrk_0_nrk_model', 'Рись-М (2 шт.)');
+await mpage.fill('#nrk_0_nrk_mod_note', 'кріплення для ношів, додатковий акумулятор, антена');
+// друга точка: з’явився НРК — без моделі перше «Зберегти» показує пропуски
+await mpage.check('input[name="nrk_1_nrk"][value="Є"]');
+assert.ok(await mpage.isVisible('.ef[data-i="1"][data-f="nrk_model"]'));
+await mpage.click('dialog.edit [data-act="save"]');
+assert.ok(await mpage.isVisible('dialog.edit'), 'пропуски — вікно лишається відкритим');
+assert.match(await mpage.textContent('.ef[data-i="1"][data-f="nrk_model"] .err'), /Обов’язкове/);
+await mpage.fill('#nrk_1_nrk_count', '1'); await mpage.fill('#nrk_1_nrk_model', 'Термит');
+for (const k of ['nrk_reb', 'nrk_cam', 'nrk_mic']) await mpage.check(`input[name="nrk_1_${k}"][value="Ні"]`);
+await mpage.check('input[name="nrk_1_nrk_mod"][value="Ні"]');
+assert.ok(await mpage.isHidden('.ef[data-i="1"][data-f="nrk_mod_note"]'), '«Ні» — опис переобладнання прихований');
+await mpage.click('dialog.edit [data-act="save"]');
+await mpage.waitForSelector('dialog.edit', { state: 'detached' });
+assert.match(await mpage.textContent(`${row2} .st`), /змінено, не збережено/);
+await mpage.click(`${row2} [data-details]`);
+assert.match(await mpage.textContent('.details'), /Термит/);
+const poster2 = await mdl(`${row2} [data-poster]`);
+assert.equal(pageCount(poster2.bytes), 1, 'плакат з даними НРК — на один аркуш');
+await mpage.screenshot({ path: resolve(OUT, 'med-nrk.png'), fullPage: true });
+const upd = await mdl('#updated', 'upd_');
+const updPayload = await readPdfBytes(upd.bytes, { inflate });
+assert.equal(updPayload.data.points[0].nrk_model, 'Рись-М (2 шт.)', 'доповнення збережено в оновленому звіті');
+assert.equal(updPayload.data.points[1].nrk_model, 'Термит');
+assert.equal(updPayload.data.points[1].nrk_mod, 'Ні');
+assert.match(updPayload.amended || '', /^\d{4}-\d{2}-\d{2}T/, 'позначка «доповнено медслужбою» у файлі');
+assert.equal(updPayload.build, payload.build, 'версія анкети підрозділу зберігається');
+await mpage.waitForSelector('#updated', { state: 'detached', timeout: 5000 });   // після завантаження — незбереженого не лишилося
+assert.match(await mpage.textContent(`${row2} .st`), /НРК доповнено/);
+// повторне відкриття оновленого звіту разом зі старим — береться доповнений
+await mpage.click('#clear');
+await mpage.setInputFiles('#open', [report.path, resolve(OUT, upd.name)]);
+await mpage.waitForSelector('.tbl');
+assert.match(await mpage.textContent(`${row2} .st`), /НРК доповнено/, 'з двох звітів однієї дати — доповнений');
 
 console.log('▶ анкета на екрані комп’ютера: клавіатура, «Далі», історія, дублювання, огляд змін');
 const dctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, locale: 'uk-UA' });

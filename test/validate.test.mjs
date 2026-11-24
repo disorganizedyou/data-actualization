@@ -258,7 +258,7 @@ test('міграція v2 → v3: «забезпечення» + «потреб�
   // повний v2-звіт після міграції — без помилок
   assert.deepEqual(errs(migrate({ ...FULL, points: [POINT_V2], mp_std: 'Є' }, 2)).map(x => x.path), []);
   // поточна версія не перетворюється повторно
-  assert.equal(migrate(FULL, 5).migratedFrom, undefined);
+  assert.equal(migrate(FULL, 6).migratedFrom, undefined);
 });
 
 test('транслітерація імен файлів', async () => {
@@ -399,4 +399,23 @@ test('Element на іншому сервері — помилка з поясн�
   assert.ok(e); assert.match(e.msg, /Потрібен акаунт на сервері vizerunok\.org/);
   d.kb_element = '@berkut:vizerunok.org';
   assert.equal(errs(d).length, 0); assert.equal(normalizeData(d).kb_element, 'berkut');
+});
+
+test('НРК: модель і переобладнання обов’язкові; опис — лише якщо переобладнано', () => {
+  const d = clone();
+  delete d.points[0].nrk_model; delete d.points[0].nrk_mod; delete d.points[0].nrk_mod_note;
+  const e = errs(d).map(x => x.path);
+  assert.ok(e.includes('points.0.nrk_model')); assert.ok(e.includes('points.0.nrk_mod'));
+  assert.ok(!e.includes('points.0.nrk_mod_note'), 'поки не відповіли «Так» — опис не потрібен');
+  d.points[0].nrk_model = 'Рись-М'; d.points[0].nrk_mod = 'Так';
+  assert.deepEqual(errs(d).map(x => x.path), ['points.0.nrk_mod_note']);
+  d.points[0].nrk_mod = 'Ні'; d.points[0].nrk_mod_note = 'застаріле';
+  assert.equal(errs(d).length, 0); assert.equal(normalizeData(d).points[0].nrk_mod_note, undefined, 'за «Ні» опис очищається');
+  // НРК «Немає» — опис переобладнання прихований, навіть якщо лишилося старе «Так»
+  d.points[0].nrk = 'Немає'; d.points[0].nrk_mod = 'Так'; d.points[0].nrk_mod_note = 'x';
+  assert.equal(normalizeData(d).points[0].nrk_mod_note, undefined);
+  // звіт v5 (без нових полів): пропуски — «нові поля», а не помилки
+  const v5 = clone(); delete v5.points[0].nrk_model; delete v5.points[0].nrk_mod; delete v5.points[0].nrk_mod_note;
+  const m = migrate(v5, 5); assert.equal(m.migratedFrom, 5);
+  const me = errs(m); assert.ok(me.length && me.every(isNewFieldError), me.map(x => x.path).join(', '));
 });

@@ -37,9 +37,12 @@ export function crc32(bytes) {
 // ---- Конверт ----
 // kind: 'report' — повний перевірений звіт; 'draft' — чернетка (може містити помилки)
 // build — версія збірки анкети, якою заповнено дані (щоб медслужба бачила застарілі анкети)
+// amended — коли медслужба доповнила дані звіту (ISO-час), щоб позначка збереглася при повторному відкритті
 const BUILD_RE = /^[\w.\-+]{1,40}$/;
-export function makePayload(data, { kind = 'report', created, build } = {}) {
-  return { app: 'med-data-actualization', v: SCHEMA_VERSION, kind, created, ...(BUILD_RE.test(build || '') ? { build } : {}), data: normalizeData(data) };
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/;
+export function makePayload(data, { kind = 'report', created, build, amended } = {}) {
+  return { app: 'med-data-actualization', v: SCHEMA_VERSION, kind, created, ...(BUILD_RE.test(build || '') ? { build } : {}),
+    ...(ISO_RE.test(amended || '') ? { amended } : {}), data: normalizeData(data) };
 }
 export function encodePayload(payload) {
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
@@ -54,7 +57,8 @@ export function parsePayload(text) {
   if (typeof p.v !== 'number' || p.v > SCHEMA_VERSION) throw new Error('Файл створено новішою версією форми — оновіть форму');
   if (!p.data || typeof p.data !== 'object' || Array.isArray(p.data)) throw new Error('Пошкоджені дані у файлі');
   return { v: p.v, kind: p.kind === 'draft' ? 'draft' : 'report', created: typeof p.created === 'string' ? p.created : undefined,
-    build: typeof p.build === 'string' && BUILD_RE.test(p.build) ? p.build : undefined, data: migrate(p.data, p.v) };
+    build: typeof p.build === 'string' && BUILD_RE.test(p.build) ? p.build : undefined,
+    amended: typeof p.amended === 'string' && ISO_RE.test(p.amended) ? p.amended : undefined, data: migrate(p.data, p.v) };
 }
 
 // Міграція даних зі старіших версій схеми.
@@ -66,6 +70,8 @@ export function parsePayload(text) {
 //   v3 → v4: новий розділ про медичні пункти (список).
 //   v4 → v5: медпункт у підрозділі один — список medpoints замінено полями mp_coords і mphead_*
 //            (з v4 беремо перший медпункт; назва медпункту більше не збирається).
+//   v5 → v6: нові поля НРК (модель і назва, чи переобладнано, що саме) — достатньо нормалізації;
+//            у звітах, заповнених раніше, їх доповнює медслужба (інструмент медслужби, «Доповнити НРК»).
 //   Для всіх версій: обладнання НРК (РЕБ/камера/мікрофон) — лише Так/Ні; давнє «Частково»
 //   не вгадуємо, а очищаємо — форма попросить відповісти заново.
 const SUPPLY_V3 = { 'Так': 'Повна', 'Частково': 'Часткова', 'Ні': 'Немає' };
